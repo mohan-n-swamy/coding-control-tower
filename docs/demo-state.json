@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "generated_at": "2099-07-14T10:44:00Z",
+  "config": {"stale_threshold_ms": 900000},
+  "ownerName": "Alex",
+  "mood": "concerned",
+  "now": {
+    "projectId": "checkout-reliability",
+    "project": "Checkout Reliability",
+    "title": "Verify retry handling after payment timeout",
+    "stoppedAt": "Integration tests pass; production replay still pending.",
+    "next": "Run the production-safe replay and attach evidence to PR #184",
+    "activityAt": "2099-07-14T10:41:00Z",
+    "session": "7f42a9ce-demo",
+    "correlation": "observed"
+  },
+  "needsOwner": [
+    {
+      "projectId": "support-console",
+      "project": "Support Console",
+      "kind": "workflow_failure",
+      "title": "Release verification",
+      "activityAt": "2099-07-14T09:52:00Z",
+      "error": {"cause": "Choose whether to retry the staging deployment", "impact": "Release remains on staging.", "next": "Inspect failed check, then retry or stop."}
+    }
+  ],
+  "github": {"enabled": true, "available": true, "generatedAt": "2099-07-14T10:40:00Z", "count": 4, "error": null},
+  "usage": {
+    "period": "today",
+    "totalIn": 2150000,
+    "totalOut": 322000,
+    "models": [
+      {"provider": "Anthropic", "model": "claude-sonnet-4-5", "tin": 1200000, "tout": 184000, "share": 62},
+      {"provider": "Anthropic", "model": "claude-opus-4-1", "tin": 310000, "tout": 42000, "share": 21},
+      {"provider": "OpenAI", "model": "gpt-4.1-mini", "tin": 640000, "tout": 96000, "share": 17}
+    ]
+  },
+  "tasks": [{}, {}],
+  "workflows": [{}],
+  "skipped_files": 0,
+  "projects": [
+    {
+      "id": "checkout-reliability",
+      "name": "Checkout Reliability",
+      "path": "~/work/checkout-reliability",
+      "branch": "fix/payment-retry",
+      "state": "active",
+      "activityAt": "2099-07-14T10:41:00Z",
+      "hasActiveTask": true,
+      "hasRunningWorkflow": false,
+      "counts": {"openPRs": 1, "mergedPRs": 1, "failedRuns": 0},
+      "prs": [
+        {"number": 184, "title": "Make payment retry idempotent", "status": "open", "updatedAt": "2099-07-14T10:38:00Z", "summary": "Adds idempotency keys and a bounded retry policy.", "claimedOutcome": null, "url": "https://github.com/example/checkout/pull/184", "workItems": [{"title": "Verify retry handling after payment timeout", "status": "in_progress"}, {"title": "Add idempotency keys to payment retry", "status": "completed"}]},
+        {"number": 179, "title": "Add timeout telemetry", "status": "merged", "updatedAt": "2099-07-13T17:10:00Z", "summary": "Records gateway timeout cause and retry count.", "claimedOutcome": "Timeout cause is visible in the operations dashboard.", "url": "https://github.com/example/checkout/pull/179", "workItems": []}
+      ],
+      "localWork": []
+    },
+    {
+      "id": "support-console",
+      "name": "Support Console",
+      "path": "~/work/support-console",
+      "branch": "release/2.4",
+      "state": "attention",
+      "activityAt": "2099-07-14T09:52:00Z",
+      "hasActiveTask": false,
+      "hasRunningWorkflow": false,
+      "counts": {"openPRs": 1, "mergedPRs": 0, "failedRuns": 1},
+      "prs": [{"number": 62, "title": "Release 2.4 verification", "status": "open", "updatedAt": "2099-07-14T09:52:00Z", "summary": "Runs staging release checks.", "claimedOutcome": null, "url": "https://github.com/example/support/pull/62", "workItems": []}],
+      "localWork": [{"title": "Release verification", "type": "workflow", "status": "failed", "activityAt": "2099-07-14T09:52:00Z", "error": {"cause": "Staging check timed out", "impact": "No production release claim made.", "next": "Inspect check logs."}}]
+    },
+    {
+      "id": "developer-portal",
+      "name": "Developer Portal",
+      "path": "~/work/developer-portal",
+      "branch": "main",
+      "state": "history",
+      "activityAt": "2099-07-12T15:20:00Z",
+      "hasActiveTask": false,
+      "hasRunningWorkflow": false,
+      "counts": {"openPRs": 0, "mergedPRs": 1, "failedRuns": 0},
+      "prs": [{"number": 41, "title": "Publish API quickstart", "status": "merged", "updatedAt": "2099-07-12T15:20:00Z", "summary": "Adds an end-to-end API quickstart.", "claimedOutcome": "New users can complete the first request from one page.", "url": "https://github.com/example/portal/pull/41", "workItems": []}],
+      "localWork": []
+    }
+  ]
+}

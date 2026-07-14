@@ -135,6 +135,42 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(live[0]["projectId"], "alpha")
         self.assertEqual(live[0]["model"], "claude-opus-4-8")
 
+    def _write_transcript(self, tmp, name, events):
+        proj = Path(tmp) / "projects" / "-work-alpha"
+        proj.mkdir(parents=True, exist_ok=True)
+        f = proj / (name + ".jsonl")
+        f.write_text("\n".join(json.dumps(e) for e in events) + "\n")
+        return f
+
+    def test_pending_askuserquestion_is_a_decision(self):
+        from coding_control_tower.scan import collect_decisions
+        ask = {"timestamp": iso_now(), "cwd": "/work/alpha", "message": {"content": [
+            {"type": "tool_use", "name": "AskUserQuestion", "id": "tu1",
+             "input": {"questions": [{"question": "Ship v1 now?"}]}}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_transcript(tmp, "pending", [ask])
+            repos = [{"id": "alpha", "name": "Alpha", "path": "/work/alpha", "repoName": "alpha", "branch": "main"}]
+            out = collect_decisions(Config(claude_dir=tmp), repos)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["kind"], "decision")
+        self.assertEqual(out[0]["ask"], "Ship v1 now?")
+        self.assertEqual(out[0]["projectId"], "alpha")
+        self.assertIn("claude --resume pending", out[0]["resumeCmd"])
+
+    def test_answered_question_and_foreign_tools_do_not_flag(self):
+        from coding_control_tower.scan import collect_decisions
+        ask = {"timestamp": iso_now(), "cwd": "/w", "message": {"content": [
+            {"type": "tool_use", "name": "AskUserQuestion", "id": "tu1",
+             "input": {"questions": [{"question": "Q?"}]}}]}}
+        answer = {"timestamp": iso_now(), "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "tu1"}]}}
+        busy = {"timestamp": iso_now(), "message": {"content": [
+            {"type": "tool_use", "name": "Bash", "id": "tu2", "input": {}}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_transcript(tmp, "answered", [ask, answer, busy])
+            out = collect_decisions(Config(claude_dir=tmp), [])
+        self.assertEqual(out, [])
+
 
 class AdapterLoaderTests(unittest.TestCase):
     def test_valid_adapter_contributes_and_bad_keys_dropped(self):

@@ -342,6 +342,87 @@ def collect_live_sessions(config: Config, repos: list[dict[str, Any]]) -> list[d
     return out[:8]
 
 
+BLOCKING_TOOLS = frozenset({"AskUserQuestion", "ExitPlanMode"})
+DECISION_MAX_AGE_H = 24  # a pending question older than this is a dead session, not a decision
+
+
+def _pending_blockers(path: Path) -> list[dict[str, Any]]:
+    """Single forward pass over one Claude transcript: blocking tool_use entries
+    with no matching tool_result. Returns [{id, name, question, askedAt, cwd}]."""
+    pending: dict[str, dict[str, Any]] = {}
+    cwd = None
+    try:
+        handle = path.open("r", encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    with handle:
+        for line in handle:
+            if '"tool_use"' not in line and '"tool_result"' not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            cwd = row.get("cwd") or cwd
+            message = row.get("message") if isinstance(row.get("message"), dict) else {}
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") in BLOCKING_TOOLS:
+                    question = ""
+                    if block.get("name") == "AskUserQuestion":
+                        questions = (block.get("input") or {}).get("questions") or []
+                        if questions and isinstance(questions[0], dict):
+                            question = str(questions[0].get("question") or "")
+                    else:
+                        question = "Approve the proposed plan?"
+                    pending[str(block.get("id"))] = {
+                        "id": str(block.get("id")), "name": str(block.get("name")),
+                        "question": question[:200], "askedAt": row.get("timestamp"), "cwd": cwd,
+                    }
+                elif block.get("type") == "tool_result":
+                    pending.pop(str(block.get("tool_use_id")), None)
+    return list(pending.values())
+
+
+def collect_decisions(config: Config, repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """needsOwner kind:'decision' entries — sessions waiting on the user right now."""
+    claude = config.resolved_claude_dir()
+    projects_dir = claude / "projects" if claude else None
+    if not projects_dir or not projects_dir.is_dir():
+        return []
+    cutoff = time.time() - DECISION_MAX_AGE_H * 3600
+    out: list[dict[str, Any]] = []
+    for path in projects_dir.glob("*/*.jsonl"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                continue
+        except OSError:
+            continue
+        blockers = _pending_blockers(path)
+        if not blockers:
+            continue
+        newest = max(blockers, key=lambda item: timestamp(item.get("askedAt")))
+        repo = project_for_cwd(newest.get("cwd"), repos)
+        session = path.stem
+        out.append({
+            "kind": "decision",
+            "projectId": repo["id"] if repo else None,
+            "project": repo["name"] if repo else (newest.get("cwd") or "unknown"),
+            "ask": newest["question"] or f"{newest['name']} pending",
+            "blocks": f"session {session[:8]} — waiting since ask",
+            "askedAt": newest.get("askedAt"),
+            "activityAt": newest.get("askedAt"),
+            "session": session, "source": "Claude",
+            "resumeCmd": f"claude --resume {session}" + (f"  # cwd: {newest.get('cwd')}" if newest.get("cwd") else ""),
+        })
+    out.sort(key=lambda item: timestamp(item.get("askedAt")), reverse=True)
+    return out
+
+
 def _provider_for_model(model: str) -> str:
     lowered = model.lower()
     if lowered.startswith("claude"):

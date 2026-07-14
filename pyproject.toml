@@ -42,3 +42,6 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 coding_control_tower = ["static/**/*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

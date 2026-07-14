@@ -8,9 +8,9 @@ Keep runtime dependency-free where practical. New collectors must:
 4. redact before snapshot writes;
 5. include synthetic tests with no private paths or credentials.
 
-Run:
+Run the tests:
 
 ```bash
-python -m unittest discover -s tests -v
+python -m pytest tests/ -q
 ```
 

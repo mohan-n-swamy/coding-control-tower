@@ -216,6 +216,11 @@ const fmtDay=v=>{const d=new Date(v);return Number.isNaN(+d)?'—':new Intl.Date
 const fmtClock=v=>{const d=v?new Date(v):new Date();if(Number.isNaN(+d))return'—';const day=new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(d);const hm=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit'}).format(d);return day.replace(',','')+' · '+hm};
 const age=v=>{if(!v)return'—';const m=Math.max(0,Date.now()-new Date(v));return m<36e5?Math.floor(m/6e4)+'m ago':m<864e5?Math.floor(m/36e5)+'h ago':Math.floor(m/864e5)+'d ago'};
 const fmtUTC=v=>{const d=v?new Date(v):new Date();if(Number.isNaN(+d))return'—';return d.toISOString().slice(0,16).replace('T',' ')+' UTC'};
+// DD MMM YYYY HH:MM [tz] — e.g. "15 Jul 2026 03:42 IST". tz = viewer's local zone.
+const fmtStamp=v=>{if(!v)return'—';const d=new Date(v);if(Number.isNaN(+d))return'—';
+  const p=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZoneName:'short'}).formatToParts(d);
+  const g=t=>(p.find(x=>x.type===t)||{}).value||'';
+  return g('day')+' '+g('month')+' '+g('year')+' '+g('hour')+':'+g('minute')+' '+g('timeZoneName')};
 const fmtTok=n=>{n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(2).replace(/\.?0+$/,'')+'M':n>=1e3?Math.round(n/1e3)+'k':String(n)};
 function tone(s){return {open:'active',draft:'draft',merged:'merged',closed:'failed',active:'active',planning:'planning',attention:'attention',history:'idle',idle:'idle'}[s]||'idle'}
 function statusLabel(s){return {open:'Active',draft:'Draft',merged:'Merged',closed:'Closed'}[s]||s||'Unknown'}
@@ -240,7 +245,8 @@ function localWork(items){if(!items||!items.length)return null;const d=el('div',
 function countsText(p){const c=p.counts||{};const bits=[];if(c.openPRs)bits.push(c.openPRs+' active');if(c.mergedPRs)bits.push(c.mergedPRs+' merged');if(c.failedRuns)bits.push(c.failedRuns+' failed');return bits.join(' · ')}
 function projectPanel(p){const isOpen=openProj.has(p.id);const t=tone(p.state);const wrap=el('div');wrap.id='proj-'+p.id;const s=el('section','proj proj-'+t+(isOpen?' is-open':''));const b=el('button','projhead');b.setAttribute('aria-expanded',String(isOpen));b.addEventListener('click',()=>{isOpen?openProj.delete(p.id):openProj.add(p.id);render(lastState)});
 const path=[p.path,''].join('');const pp=el('span','ppath');pp.append(document.createTextNode(path?path+' · ':''));if(p.branch)pp.append(el('b','',p.branch));
-put(b,mascot(PROJ_MASCOT[p.state]||'idle',52),el('span','pname',p.name||'Unassigned'),pp,el('span','pcounts',countsText(p)),el('span','pact',age(p.activityAt)),chev());s.append(b);
+const pactEl=el('span','pact',fmtStamp(p.activityAt));pactEl.title=age(p.activityAt);
+put(b,mascot(PROJ_MASCOT[p.state]||'idle',52),el('span','pname',p.name||'Unassigned'),pp,el('span','pcounts',countsText(p)),pactEl,chev());s.append(b);
 if(isOpen){const body=el('div','projbody');const line=el('div','timeline');if(!(p.prs||[]).length)line.append(el('div','empty','No GitHub PR evidence for this project.'));(p.prs||[]).forEach(pr=>line.append(prItem(p.id,pr)));body.append(line);const lw=localWork(p.localWork);if(lw)body.append(lw);s.append(body)}
 wrap.append(s);return wrap}
 function renderTicker(s){const h=$('#ticker'),owner=s.ownerName||'You',needsList=s.needsOwner||s.needsMohan||[];const active=(s.projects||[]).filter(p=>p.hasActiveTask||p.hasRunningWorkflow).length;const merged=(s.projects||[]).reduce((n,p)=>n+((p.counts||{}).mergedPRs||0),0);const failed=(s.projects||[]).reduce((n,p)=>n+((p.counts||{}).failedRuns||0),0);const needs=needsList.length;

@@ -13,23 +13,34 @@
 
 ## Current goal
 
-Published v0.1.0 as public OSS (pip + brew installable) with the unassigned-session flood fixed. Now in maintenance — next work is optional coverage/UX polish.
+Build **Mission Control v1** (specs/002) — pivot from PR-ledger to agent-fleet
+dashboard: blocked-on-you queue, live-sessions board, wrap-up ingestion,
+multi-provider usage, LIVE/DORMANT/ARCHIVE buckets, STATUS.md resume panel. The
+design pack is authored + merged; the BUILD has not started.
 
 ## Latest verified evidence
 
-- Scan collapse: **406 → 38 cards** on the real rig (30 repos + 7 PR-derived + 1 demoted `unassigned` bucket), `scan` output confirmed.
-- Tests: **16/16 pass** (bare `pytest`, `pythonpath=["src"]`).
-- Adversarial verify: 3-refuter Workflow (`wf_df6a12a5`) caught a now-slot regression the unit tests missed → fixed with a structural bucket-pin + regression test.
-- Distribution V-gated in a clean env: `pip install git+https://…` (CLI + static assets bundle) AND `brew install mohan-n-swamy/tap/coding-control-tower` (`brew test` green).
-- Public: `github.com/mohan-n-swamy/coding-control-tower` @ `main` `8782938`; tap `github.com/mohan-n-swamy/homebrew-tap`.
+- **Design pack merged** (PR #1 → `d6dff2b`): 14 Haiku-proof components,
+  `manuf-pack-validate` VALID, `lint-pack-coherence` ALL THREADS HOLD.
+- Design source VENDORED at `specs/002-mission-control/design/` — `tower-data.js` is
+  the state.json field-name contract; `VariantGrid` JSX is the 1:1 frontend target.
+- All data shapes probe-verified live: Claude transcripts at
+  `~/.claude/projects/<munged>/<uuid>.jsonl` (mtime-live), blocked marker =
+  unmatched AskUserQuestion tool_use (id-matching proven 3/3), brain-router audit
+  `~/.local/state/brain-router-delegations.jsonl` has `tokens_out`.
+- v0.1.x shipped earlier: 406→38 card collapse, grid/UTC/timezone/full-width-card
+  fixes, pip + brew installs V-gated, 16/16 tests.
 
 ## Blocker
 
-_none_
+_none — next step is a single command_
 
 ## Next action
 
-- [ ] _Optional:_ raise `unassigned`-bucket coverage or add a project-`STATUS.md` adapter to the dashboard (surface each scanned repo's STATUS.md in the UI). Not started — pick up only if the tool gets active again.
+- [ ] Run `/manufacture assemble 002-mission-control` in a fresh session (Opus
+  orchestrates; pack is the contract). Then the SC1-SC8 ship gates in
+  `specs/002-mission-control/verification.md`, then deploy personal (serve restart +
+  `adapter_dirs` config) and public (v0.2.0 release + Formula sha).
 
 ---
 _Refresh with `bin/gen-status.rb coding-control-tower` before /save, /park, /wrap-up. Machine header (Updated/Branch/HEAD/Tree) is auto-filled; the prose is yours._

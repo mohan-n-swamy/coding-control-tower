@@ -117,5 +117,34 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(metadata["branch"], "feature/new")
 
 
+class AdapterLoaderTests(unittest.TestCase):
+    def test_valid_adapter_contributes_and_bad_keys_dropped(self):
+        from coding_control_tower.adapters import load_external, run_collectors
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "good.py").write_text(
+                "def collect(config):\n"
+                "    return {'usage_models': [{'provider':'Z.ai','model':'glm-5.2','tin':10,'tout':5,'approx':True}],\n"
+                "            'wrapups': {'proj': {'focus':'f','next':'n','evil':'x'}},\n"
+                "            'evil_channel': 1}\n")
+            collectors, errs = load_external(Config(adapter_dirs=[tmp]))
+            self.assertEqual(errs, [])
+            merged, run_errs = run_collectors(collectors, Config())
+            self.assertEqual(run_errs, [])
+            self.assertEqual(merged["usage_models"][0]["provider"], "Z.ai")
+            self.assertTrue(merged["usage_models"][0]["approx"])
+            self.assertEqual(merged["wrapups"]["proj"], {"focus": "f", "next": "n"})
+
+    def test_broken_adapter_isolated_as_error(self):
+        from coding_control_tower.adapters import load_external, run_collectors
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "boom.py").write_text("def collect(config):\n    raise RuntimeError('x')\n")
+            Path(tmp, "noattr.py").write_text("VALUE = 1\n")
+            collectors, errs = load_external(Config(adapter_dirs=[tmp]))
+            self.assertEqual(len(errs), 1)  # noattr rejected at load
+            merged, run_errs = run_collectors(collectors, Config())
+            self.assertEqual(len(run_errs), 1)  # boom rejected at run
+            self.assertEqual(merged["usage_models"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

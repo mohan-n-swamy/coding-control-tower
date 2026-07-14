@@ -90,11 +90,11 @@ code,.prnum,.prdate,.pact,.clock,.us-tok,.runs{font-variant-numeric:tabular-nums
 .proj:hover{border-color:oklch(from var(--line) calc(l + .12) c h)}
 .proj-active,.proj-active:hover{border-color:oklch(from var(--acc) l c h/.45)}
 .proj-attention,.proj-attention:hover{border-color:oklch(from var(--amber) l c h/.4)}
-.projhead{display:flex;align-items:center;gap:12px;width:100%;padding:calc(13px*var(--u)) 16px;background:none;border:0;color:inherit;cursor:pointer;text-align:left;border-radius:10px}
+.projhead{display:flex;align-items:center;gap:12px;width:100%;min-width:0;padding:calc(13px*var(--u)) 16px;background:none;border:0;color:inherit;cursor:pointer;text-align:left;border-radius:10px}
 .projhead:hover,.projhead:focus-visible{background:oklch(from var(--panel2) l c h/.6)}
 .projhead:focus-visible,.prhead:focus-visible{outline:1.5px solid var(--acc);outline-offset:-1px}
 .pname{font-weight:700;font-size:15px;white-space:nowrap;letter-spacing:-.01em}
-.ppath{font-size:11px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ppath{flex:1;min-width:0;font-size:11px;color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ppath b{color:var(--dim);font-weight:500}
 .pcounts{margin-left:auto;font-size:10.5px;color:var(--dim);white-space:nowrap}
 .pact{font-size:10.5px;color:var(--mute);white-space:nowrap}
@@ -169,7 +169,7 @@ code,.prnum,.prdate,.pact,.clock,.us-tok,.runs{font-variant-numeric:tabular-nums
 .hero-mohan{background:var(--panel);border:1px solid oklch(from var(--amber) l c h/.35);border-radius:12px;padding:calc(16px*var(--u)) 18px;display:grid;gap:10px;align-content:start}
 .hero-mohan .mhero{aspect-ratio:auto;height:220px}
 .tilegrid{display:block}
-.v-grid .sect-body{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.v-grid .sect-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
 .v-grid .sect-body .proj{margin:0}
 .v-grid .sect-body>div:has(.proj.is-open),.v-grid .sect-body>div:only-child{grid-column:1/-1}
 @media (max-width:1100px){

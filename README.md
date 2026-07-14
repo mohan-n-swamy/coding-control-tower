@@ -12,16 +12,24 @@ A local, project-first dashboard for answering:
 
 ## Install
 
-Until the first PyPI release, install directly from GitHub:
+With pip (or pipx):
+
+```bash
+pipx install coding-control-tower
+# or
+python -m pip install --user coding-control-tower
+```
+
+With Homebrew:
+
+```bash
+brew install mohan-n-swamy/tap/coding-control-tower
+```
+
+From source:
 
 ```bash
 pipx install git+https://github.com/mohan-n-swamy/coding-control-tower.git
-```
-
-Or with pip:
-
-```bash
-python -m pip install --user git+https://github.com/mohan-n-swamy/coding-control-tower.git
 ```
 
 Then configure and run:

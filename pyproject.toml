@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coding-control-tower"
+version = "0.1.0"
+description = "Local, project-first dashboard for coding sessions and pull requests"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Mohan Narayanaswamy"}]
+requires-python = ">=3.10"
+keywords = ["dashboard", "developer-tools", "claude", "pull-requests", "local-first"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+
+[project.urls]
+Homepage = "https://github.com/mohan-n-swamy/coding-control-tower"
+Repository = "https://github.com/mohan-n-swamy/coding-control-tower"
+Issues = "https://github.com/mohan-n-swamy/coding-control-tower/issues"
+
+[project.scripts]
+coding-control-tower = "coding_control_tower.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+coding_control_tower = ["static/**/*"]

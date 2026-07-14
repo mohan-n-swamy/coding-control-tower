@@ -216,9 +216,13 @@ const fmtDay=v=>{const d=new Date(v);return Number.isNaN(+d)?'—':new Intl.Date
 const fmtClock=v=>{const d=v?new Date(v):new Date();if(Number.isNaN(+d))return'—';const day=new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(d);const hm=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit'}).format(d);return day.replace(',','')+' · '+hm};
 const age=v=>{if(!v)return'—';const m=Math.max(0,Date.now()-new Date(v));return m<36e5?Math.floor(m/6e4)+'m ago':m<864e5?Math.floor(m/36e5)+'h ago':Math.floor(m/864e5)+'d ago'};
 const fmtUTC=v=>{const d=v?new Date(v):new Date();if(Number.isNaN(+d))return'—';return d.toISOString().slice(0,16).replace('T',' ')+' UTC'};
-// DD MMM YYYY HH:MM [tz] — e.g. "15 Jul 2026 03:42 IST". tz = viewer's local zone.
+// Configured display timezone (IANA name from config.timezone); '' = viewer-local.
+let TZ='';
+// DD MMM YYYY HH:MM [tz] — e.g. "15 Jul 2026 03:42 IST". Uses TZ if set, else local.
 const fmtStamp=v=>{if(!v)return'—';const d=new Date(v);if(Number.isNaN(+d))return'—';
-  const p=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZoneName:'short'}).formatToParts(d);
+  const opt={day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false,timeZoneName:'short'};
+  if(TZ)opt.timeZone=TZ;
+  let p;try{p=new Intl.DateTimeFormat('en-GB',opt).formatToParts(d)}catch(e){delete opt.timeZone;p=new Intl.DateTimeFormat('en-GB',opt).formatToParts(d)}
   const g=t=>(p.find(x=>x.type===t)||{}).value||'';
   return g('day')+' '+g('month')+' '+g('year')+' '+g('hour')+':'+g('minute')+' '+g('timeZoneName')};
 const fmtTok=n=>{n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(2).replace(/\.?0+$/,'')+'M':n>=1e3?Math.round(n/1e3)+'k':String(n)};
@@ -272,6 +276,7 @@ const sec=el('div','sect sect-'+key);const head=el('div','ml-row sect-head');put
 const body=el('div','sect-body');ps.forEach(p=>body.append(projectPanel(p)));put(sec,head,body);host.append(sec)})}
 let lastState=null;
 function render(s){lastState=s;
+TZ=(s.config&&s.config.timezone)||'';
 if(!seeded){seeded=true;if(s.now&&s.now.projectId){openProj.add(s.now.projectId);const proj=(s.projects||[]).find(p=>p.id===s.now.projectId);const activePr=((proj||{}).prs||[]).find(pr=>(pr.workItems||[]).some(w=>['in_progress','running'].includes(String(w.status||''))));if(activePr)openPr.add(s.now.projectId+'#'+(activePr.number||activePr.title))}}
 renderTicker(s);renderNow(s);renderMohan(s);renderUsage(s);renderProjects(s);
 const stale=Date.now()-new Date(s.generated_at)>((s.config&&s.config.stale_threshold_ms)||9e5);

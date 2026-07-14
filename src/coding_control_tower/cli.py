@@ -73,8 +73,10 @@ def set_config(config: Config, key: str, value: str) -> int:
         config.owner_name = value.strip() or "You"
     elif key == "port":
         config.port = int(value)
+    elif key == "timezone":
+        config.timezone = value.strip()  # IANA name, e.g. Asia/Kolkata; "" = viewer-local
     else:
-        print(f"Unknown config key: {key}. Supported: name, port", file=sys.stderr)
+        print(f"Unknown config key: {key}. Supported: name, port, timezone", file=sys.stderr)
         return 2
     save_config(config)
     print(f"Updated {key}: {value}")
@@ -101,7 +103,7 @@ def parser() -> argparse.ArgumentParser:
     config_parser = sub.add_parser("config", help="Show or change configuration")
     config_sub = config_parser.add_subparsers(dest="config_command")
     set_parser = config_sub.add_parser("set")
-    set_parser.add_argument("key", choices=("name", "port"))
+    set_parser.add_argument("key", choices=("name", "port", "timezone"))
     set_parser.add_argument("value")
     return root
 

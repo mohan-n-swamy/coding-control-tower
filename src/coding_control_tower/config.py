@@ -49,6 +49,7 @@ class Config:
     port: int = 7777
     scan_depth: int = 5
     project_names: dict[str, str] = field(default_factory=dict)
+    timezone: str = ""  # IANA name (e.g. "Asia/Kolkata"); "" = viewer's browser-local
 
     def resolved_claude_dir(self) -> Path | None:
         value = self.claude_dir or os.environ.get("CLAUDE_CONFIG_DIR")
@@ -90,6 +91,8 @@ class Config:
             config.scan_depth = raw["scan_depth"]
         if isinstance(raw.get("project_names"), dict):
             config.project_names = {str(k): str(v) for k, v in raw["project_names"].items()}
+        if isinstance(raw.get("timezone"), str):
+            config.timezone = raw["timezone"].strip()
         return config
 
 

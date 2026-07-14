@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import contextlib
 import mimetypes
+import sys
 import threading
 import time
 import urllib.parse
@@ -57,9 +57,14 @@ class TowerHandler(BaseHTTPRequestHandler):
 
 
 def _refresh_loop(config: Config, stop: threading.Event) -> None:
+    # A silently-suppressed refresh failure freezes the dashboard at startup state
+    # (the stale-data trap). Log the failure so it's visible; the frontend's own
+    # staleness banner (generated_at age) then warns the viewer the data is old.
     while not stop.wait(30):
-        with contextlib.suppress(Exception):
+        try:
             scan(config, refresh_github=False)
+        except Exception as exc:  # noqa: BLE001 — refresh must never kill the loop
+            print(f"Coding Control Tower: refresh failed: {exc}", file=sys.stderr)
 
 
 def serve(config: Config, open_browser: bool = True) -> None:

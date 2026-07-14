@@ -169,9 +169,10 @@ code,.prnum,.prdate,.pact,.clock,.us-tok,.runs{font-variant-numeric:tabular-nums
 .hero-mohan{background:var(--panel);border:1px solid oklch(from var(--amber) l c h/.35);border-radius:12px;padding:calc(16px*var(--u)) 18px;display:grid;gap:10px;align-content:start}
 .hero-mohan .mhero{aspect-ratio:auto;height:220px}
 .tilegrid{display:block}
-.v-grid .sect-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+/* Design fidelity (mission-grid): project cards are FULL-WIDTH, stacked one per row.
+   The two-column split lives INSIDE an expanded card (.prbody), never between cards. */
+.v-grid .sect-body{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
 .v-grid .sect-body .proj{margin:0}
-.v-grid .sect-body>div:has(.proj.is-open),.v-grid .sect-body>div:only-child{grid-column:1/-1}
 @media (max-width:1100px){
 .hero-row,.v-grid .sect-body{grid-template-columns:1fr}
 .hero-now .mhero,.hero-mohan .mhero{aspect-ratio:auto;height:150px}

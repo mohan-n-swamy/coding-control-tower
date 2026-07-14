@@ -38,6 +38,14 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config_dir(), Path("C:/Users/Alex/AppData/Roaming/coding-control-tower"))
             self.assertEqual(state_dir(), Path("C:/Users/Alex/AppData/Local/coding-control-tower"))
 
+    def test_adapter_dirs_and_archive_days_parse_and_default(self):
+        c = Config.from_dict({"adapter_dirs": ["/tmp/a", 7], "archive_days": 45})
+        self.assertEqual(c.adapter_dirs, ["/tmp/a"])
+        self.assertEqual(c.archive_days, 45)
+        d = Config.from_dict({"archive_days": 0})
+        self.assertEqual(d.adapter_dirs, [])
+        self.assertEqual(d.archive_days, 30)
+
 
 if __name__ == "__main__":
     unittest.main()

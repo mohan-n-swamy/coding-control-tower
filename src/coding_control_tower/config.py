@@ -50,6 +50,8 @@ class Config:
     scan_depth: int = 5
     project_names: dict[str, str] = field(default_factory=dict)
     timezone: str = ""  # IANA name (e.g. "Asia/Kolkata"); "" = viewer's browser-local
+    adapter_dirs: list[str] = field(default_factory=list)  # dirs of external adapter .py files
+    archive_days: int = 30  # projects idle longer than this land in ARCHIVE (else DORMANT)
 
     def resolved_claude_dir(self) -> Path | None:
         value = self.claude_dir or os.environ.get("CLAUDE_CONFIG_DIR")
@@ -93,6 +95,10 @@ class Config:
             config.project_names = {str(k): str(v) for k, v in raw["project_names"].items()}
         if isinstance(raw.get("timezone"), str):
             config.timezone = raw["timezone"].strip()
+        if isinstance(raw.get("adapter_dirs"), list):
+            config.adapter_dirs = [item for item in raw["adapter_dirs"] if isinstance(item, str)]
+        if isinstance(raw.get("archive_days"), int) and 1 <= raw["archive_days"] <= 365:
+            config.archive_days = raw["archive_days"]
         return config
 
 

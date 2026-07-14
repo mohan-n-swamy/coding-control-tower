@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -115,6 +116,24 @@ class ScanTests(unittest.TestCase):
             metadata = read_jsonl_metadata(session)
         self.assertEqual(metadata["cwd"], "/work/new")
         self.assertEqual(metadata["branch"], "feature/new")
+
+    def test_collect_live_sessions_detects_fresh_transcripts_by_mtime(self):
+        from coding_control_tower.scan import collect_live_sessions
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp) / "projects" / "-work-alpha"
+            proj.mkdir(parents=True)
+            fresh = proj / "abc.jsonl"
+            fresh.write_text(json.dumps({"timestamp": iso_now(), "cwd": "/work/alpha",
+                "message": {"model": "claude-opus-4-8"}}) + "\n")
+            stale = proj / "old.jsonl"
+            stale.write_text("{}\n")
+            os.utime(stale, (0, 0))
+            repos = [{"id": "alpha", "name": "Alpha", "path": "/work/alpha", "repoName": "alpha", "branch": "main"}]
+            live = collect_live_sessions(Config(claude_dir=tmp, codex_dir=tmp), repos)
+        self.assertEqual(len(live), 1)
+        self.assertEqual(live[0]["session"], "abc")
+        self.assertEqual(live[0]["projectId"], "alpha")
+        self.assertEqual(live[0]["model"], "claude-opus-4-8")
 
 
 class AdapterLoaderTests(unittest.TestCase):

@@ -256,6 +256,92 @@ def collect_codex(config: Config) -> list[dict[str, Any]]:
     return work
 
 
+LIVE_WINDOW_MIN = 10  # a session whose transcript moved within this window is "live now"
+
+
+def _claude_session_probe(path: Path) -> dict[str, Any]:
+    """Cheap tail/head probe of one Claude transcript: model + startedAt + cwd.
+    Reads at most 64 lines from each end; malformed lines skipped per-line."""
+    model = None
+    started = None
+    cwd = None
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            head = [handle.readline() for _ in range(64)]
+        tail = path.read_text(encoding="utf-8", errors="replace").splitlines()[-64:]
+    except OSError:
+        return {"model": None, "startedAt": None, "cwd": None}
+    for line in head:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        started = started or row.get("timestamp")
+        cwd = cwd or row.get("cwd")
+        if started and cwd:
+            break
+    for line in reversed(tail):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        cwd = row.get("cwd") or cwd
+        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        candidate = str(message.get("model") or "")
+        if candidate and not candidate.startswith("<"):
+            model = candidate
+            break
+    return {"model": model, "startedAt": started, "cwd": cwd}
+
+
+def collect_live_sessions(config: Config, repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every session whose transcript was written within LIVE_WINDOW_MIN minutes."""
+    cutoff = time.time() - LIVE_WINDOW_MIN * 60
+    out: list[dict[str, Any]] = []
+    claude = config.resolved_claude_dir()
+    projects_dir = claude / "projects" if claude else None
+    if projects_dir and projects_dir.is_dir():
+        for path in projects_dir.glob("*/*.jsonl"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+            except OSError:
+                continue
+            probe = _claude_session_probe(path)
+            repo = project_for_cwd(probe["cwd"], repos)
+            out.append({
+                "source": "Claude", "session": path.stem,
+                "projectId": repo["id"] if repo else None,
+                "project": repo["name"] if repo else None,
+                "cwd": probe["cwd"], "model": probe["model"],
+                "activityAt": iso_mtime(path), "startedAt": probe["startedAt"],
+            })
+    codex = config.resolved_codex_dir()
+    sessions = codex / "sessions" if codex else None
+    if sessions and sessions.is_dir():
+        for path in sessions.rglob("*.jsonl"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+                first = path.open("r", encoding="utf-8", errors="replace").readline()
+                row = json.loads(first)
+                payload = row.get("payload") or {}
+                if row.get("type") != "session_meta" or payload.get("thread_source") == "subagent":
+                    continue
+            except (OSError, ValueError):
+                continue
+            repo = project_for_cwd(payload.get("cwd"), repos)
+            out.append({
+                "source": "Codex", "session": str(payload.get("id") or path.stem),
+                "projectId": repo["id"] if repo else None,
+                "project": repo["name"] if repo else None,
+                "cwd": payload.get("cwd"), "model": None,
+                "activityAt": iso_mtime(path), "startedAt": row.get("timestamp"),
+            })
+    out.sort(key=lambda item: timestamp(item.get("activityAt")), reverse=True)
+    return out[:8]
+
+
 def _provider_for_model(model: str) -> str:
     lowered = model.lower()
     if lowered.startswith("claude"):

@@ -29,13 +29,32 @@ class ScanTests(unittest.TestCase):
             self.assertEqual(found[0]["name"], "Strange Repo")
             self.assertEqual(found[0]["branch"], "feature/test")
 
-    def test_unassigned_sessions_never_mix(self):
+    def test_unmapped_sessions_collapse_into_one_bucket(self):
+        # Many cwd-unmapped sessions must not each spawn a top-level card — they
+        # collapse into ONE "unassigned" bucket, else real repos get drowned.
         work = [
             {"type": "task", "source": "Claude", "session": "aaaaaaaa-1", "cwd": None, "title": "One", "status": "pending", "activityAt": "2026-07-14T10:00:00Z", "prNumber": None},
             {"type": "task", "source": "Claude", "session": "bbbbbbbb-2", "cwd": None, "title": "Two", "status": "pending", "activityAt": "2026-07-14T11:00:00Z", "prNumber": None},
         ]
         projects = assemble(Config(), [], work, [], [])
-        self.assertEqual({project["id"] for project in projects}, {"unassigned-aaaaaaaa", "unassigned-bbbbbbbb"})
+        self.assertEqual({project["id"] for project in projects}, {"unassigned"})
+        bucket = next(p for p in projects if p["id"] == "unassigned")
+        self.assertEqual(len(bucket["localWork"]), 2)
+
+    def test_unassigned_bucket_never_wins_now_over_real_repo(self):
+        # An in-progress item in the noise bucket must NOT flip it active and steal
+        # the "now" slot from a real repo (adversarial regression, 2026-07-14).
+        repo = {"id": "alpha", "name": "Alpha", "path": "/work/alpha", "repoName": "alpha", "branch": "main"}
+        work = [
+            {"type": "task", "source": "Claude", "session": "orphan-1", "cwd": None, "title": "Orphan running", "status": "in_progress", "activityAt": "2099-01-01T00:00:00Z", "prNumber": None},
+            {"type": "task", "source": "Claude", "session": "s", "cwd": "/work/alpha/src", "title": "Real pending", "status": "pending", "activityAt": "2026-01-01T00:00:00Z", "prNumber": None},
+        ]
+        projects = assemble(Config(), [repo], work, [], [])
+        bucket = next(p for p in projects if p["id"] == "unassigned")
+        self.assertFalse(bucket["hasActiveTask"])
+        self.assertEqual(bucket["state"], "history")
+        # bucket must sort AFTER the real repo despite its newer in-progress item
+        self.assertEqual(projects[0]["id"], "alpha")
 
     def test_active_first_and_exact_pr_link(self):
         repo = {"id": "alpha", "name": "Alpha", "path": "/work/alpha", "repoName": "alpha", "branch": "main"}

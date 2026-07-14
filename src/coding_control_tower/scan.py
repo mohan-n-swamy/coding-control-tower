@@ -429,8 +429,9 @@ def assemble(config: Config, repos: list[dict[str, Any]], work: list[dict[str, A
         if repo:
             project = projects[repo["id"]]
         else:
-            short = str(item.get("session") or "unknown")[:8]
-            project = ensure(f"unassigned-{short}", f"Unassigned · session {short}")
+            # floor: all cwd-unmapped work collapses into ONE bucket, not one card per
+            # session — otherwise hundreds of non-repo sessions drown the real repos.
+            project = ensure("unassigned", "Unassigned sessions")
         project["provenance"].append({"source": item.get("source"), "session": item.get("session"), "method": "observed cwd" if repo else "unassigned"})
         project["localWork"].append(item)
         touch(project, item.get("activityAt"))
@@ -443,6 +444,15 @@ def assemble(config: Config, repos: list[dict[str, Any]], work: list[dict[str, A
             project["needsAction"].append({"kind": "workflow_failure", "title": item["title"], "activityAt": item.get("activityAt"), "error": item["error"]})
             if project["state"] != "active":
                 project["state"] = "attention"
+    bucket = projects.get("unassigned")
+    if bucket is not None and not bucket["path"]:
+        # The unassigned bucket is noise, not a project: it must never claim active
+        # status, win the "now" slot, or sort above a real repo. Pin it to history and
+        # null its activity so real repos always outrank it on the recency sort too.
+        bucket["hasActiveTask"] = False
+        bucket["state"] = "history"
+        bucket["needsAction"] = []
+        bucket["activityAt"] = None
     for project in projects.values():
         by_number = {int(pr["number"]): pr for pr in project["prs"] if pr.get("number")}
         local = []

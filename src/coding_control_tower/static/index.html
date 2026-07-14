@@ -215,6 +215,7 @@ function chev(){return el('span','chev','▾')}
 const fmtDay=v=>{const d=new Date(v);return Number.isNaN(+d)?'—':new Intl.DateTimeFormat('en',{month:'short',day:'numeric'}).format(d)};
 const fmtClock=v=>{const d=v?new Date(v):new Date();if(Number.isNaN(+d))return'—';const day=new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(d);const hm=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit'}).format(d);return day.replace(',','')+' · '+hm};
 const age=v=>{if(!v)return'—';const m=Math.max(0,Date.now()-new Date(v));return m<36e5?Math.floor(m/6e4)+'m ago':m<864e5?Math.floor(m/36e5)+'h ago':Math.floor(m/864e5)+'d ago'};
+const fmtUTC=v=>{const d=v?new Date(v):new Date();if(Number.isNaN(+d))return'—';return d.toISOString().slice(0,16).replace('T',' ')+' UTC'};
 const fmtTok=n=>{n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(2).replace(/\.?0+$/,'')+'M':n>=1e3?Math.round(n/1e3)+'k':String(n)};
 function tone(s){return {open:'active',draft:'draft',merged:'merged',closed:'failed',active:'active',planning:'planning',attention:'attention',history:'idle',idle:'idle'}[s]||'idle'}
 function statusLabel(s){return {open:'Active',draft:'Draft',merged:'Merged',closed:'Closed'}[s]||s||'Unknown'}
@@ -269,7 +270,7 @@ if(!seeded){seeded=true;if(s.now&&s.now.projectId){openProj.add(s.now.projectId)
 renderTicker(s);renderNow(s);renderMohan(s);renderUsage(s);renderProjects(s);
 const stale=Date.now()-new Date(s.generated_at)>((s.config&&s.config.stale_threshold_ms)||9e5);
 $('#stale').classList.toggle('show',stale);$('#stale').textContent=stale?'Snapshot stale — run coding-control-tower to refresh.':'';
-$('#foot').textContent=('READ-ONLY LEDGER · '+(s.projects||[]).length+' PROJECTS · REFRESHED '+fmtClock(s.generated_at)).toUpperCase()}
+$('#foot').textContent=('READ-ONLY LEDGER · '+(s.projects||[]).length+' PROJECTS · REFRESHED '+fmtClock(s.generated_at)+' · '+fmtUTC(s.generated_at)).toUpperCase()}
 async function load(){try{const r=await fetch('state.json',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const text=await r.text();if(text===lastJSON&&lastState){render(lastState);return}lastJSON=text;render(JSON.parse(text))}catch(e){const b=$('#stale');b.classList.add('show');b.textContent='Cannot read tower state: '+e.message}}
 load();setInterval(load,3000);
 </script></body></html>

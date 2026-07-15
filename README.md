@@ -8,7 +8,7 @@ A local, project-first dashboard for answering:
 - Which pull requests belong to each project?
 - What does each PR explicitly claim it delivered?
 
-![Coding Control Tower Mission Grid](docs/mission-grid.png)
+![Coding Control Tower — live mission control: session accordion, needs-you queue, multi-provider usage](docs/dashboard.png)
 
 ## Install
 
@@ -45,6 +45,21 @@ display name later:
 ```bash
 coding-control-tower config set name "Alex"
 ```
+
+## Closing a session
+
+Record where a project stands when you stop — the dashboard turns it into a
+copy-paste resume packet (NOW facts + RESUME card):
+
+```bash
+coding-control-tower wrapup --focus "hardened retry queue" \
+  --next "pin RNG seed in test_backoff_jitter" --blockers ""
+```
+
+Add `--park` when you intend to pick it up soon (shows as `[parked]`). Run it
+from anywhere inside the repo; interactive prompts fire if you omit the flags.
+Agents can close sessions for you: copy `docs/skills/wrap-up.md` into your
+Claude Code project's `.claude/skills/`, or have Codex run the same command.
 
 ## Adapters
 

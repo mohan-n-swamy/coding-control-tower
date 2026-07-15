@@ -90,6 +90,8 @@ code,.prnum,.prdate,.pact,.clock,.us-tok,.runs{font-variant-numeric:tabular-nums
 .mi-meta{font-size:10.5px;color:var(--dim);display:flex;gap:10px;flex-wrap:wrap;margin-top:2px}
 .mi-meta code{color:var(--amber)}
 .mi-age{margin-left:auto;font-size:10.5px;color:var(--amber);flex:none}
+.copybtn{background:none;border:1px solid var(--line);border-radius:5px;color:var(--dim);font-size:11px;padding:2px 6px;flex:none;align-self:center}
+.copybtn:hover{border-color:var(--acc);color:var(--acc)}
 .proj{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:calc(10px*var(--u));transition:border-color .15s}
 .proj:hover{border-color:oklch(from var(--line) calc(l + .12) c h)}
 .proj-active,.proj-active:hover{border-color:oklch(from var(--acc) l c h/.45)}
@@ -275,9 +277,14 @@ if(st)m.append(sp('started',st));if(elp)m.append(sp(elp+' elapsed',''));if(n.las
 m.append(sp('session',String(n.session||'unknown').slice(0,8),true))}
 nf.append(m);h.append(nf);
 if(live.length>1){const list=el('div','ls-list');live.slice(1).forEach(x=>{const r=el('div','ls-row');put(r,mascot('watching',24),el('b','',x.project||'Unassigned'),el('span','ls-src',x.source+(x.model?' · '+x.model:'')),el('span','ls-age',age(x.activityAt)));list.append(r)});h.append(list)}}
+function copyBtn(text,label){const b=el('button','copybtn','⧉');b.title=label||'copy';b.addEventListener('click',ev=>{ev.stopPropagation();const done=()=>{b.textContent='✓';setTimeout(()=>b.textContent='⧉',1200)};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(done,()=>window.prompt('copy:',text));else window.prompt('copy:',text)});return b}
 function renderMohan(s){const h=$('#heroMohan'),owner=(s.ownerName||'You');const needs=s.needsOwner||s.needsMohan||[];h.replaceChildren(mascotHero('attention','NEEDS '+owner.toUpperCase()+' · '+needs.length));
 if(!needs.length){h.append(el('div','empty','Nothing explicitly waiting on '+(owner==='You'?'you':owner)+'.'));return}
-needs.slice(0,5).forEach(x=>{const d=el('div','mohan-item');const b=el('div','mi-body');const meta=el('div','mi-meta');put(meta,el('code','',x.project||''),el('span','',x.kind||''));put(b,el('div','mi-ask',(x.error&&x.error.cause)||x.title||x.kind||''),meta);put(d,led('attention'),b,el('span','mi-age',age(x.activityAt)));h.append(d)})}
+needs.slice(0,6).forEach(x=>{const d=el('div','mohan-item');const b=el('div','mi-body');const meta=el('div','mi-meta');
+if(x.kind==='decision'){put(meta,el('code','',x.project||''),el('span','',x.blocks||''));put(b,el('div','mi-ask',x.ask||'Decision pending'),meta);
+const right=el('span','mi-age',age(x.askedAt||x.activityAt));put(d,led('attention'),b,right);if(x.resumeCmd)d.append(copyBtn(x.resumeCmd,'copy resume command'))}
+else{put(meta,el('code','',x.project||''),el('span','',x.kind||''));put(b,el('div','mi-ask',(x.error&&x.error.cause)||x.title||x.kind||''),meta);put(d,led('attention'),b,el('span','mi-age',age(x.activityAt)))}
+h.append(d)})}
 function renderUsage(s){const h=$('#heroUsage');h.replaceChildren(el('div','bandlabel dim','MODEL USAGE · TODAY'));const u=s.usage;
 if(!u||!(u.models||[]).length){h.append(el('div','empty','No model usage recorded today.'));return}
 const d=el('div','usage');const tot=el('div','us-total');put(tot,el('span','',fmtTok(u.totalIn)+' in'),el('span','',fmtTok(u.totalOut)+' out'));d.append(tot);

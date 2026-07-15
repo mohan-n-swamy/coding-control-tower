@@ -772,7 +772,14 @@ def build_state(config: Config, refresh_github: bool = False) -> dict[str, Any]:
     collectors, load_errors = load_external(config)
     external, run_errors = run_collectors(collectors, config)
     adapter_errors = load_errors + run_errors
-    wrapups = external.get("wrapups") or {}
+    from .wrapup import read_core_wrapups
+    wrapups = read_core_wrapups()  # the tower's own `wrapup` command — works on default installs
+    for project_id, entry in (external.get("wrapups") or {}).items():
+        current = wrapups.get(project_id)
+        # temporal compare via parse_time (handles Z vs +05:30 vs junk → 0.0),
+        # NOT lexicographic strings; external adapters win ties (power users).
+        if not current or timestamp(entry.get("at")) >= timestamp(current.get("at")):
+            wrapups[project_id] = entry
     by_id = {project["id"]: project for project in projects}
     for project_id, wrapup in wrapups.items():
         if project_id in by_id:

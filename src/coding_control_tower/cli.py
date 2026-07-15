@@ -83,6 +83,24 @@ def set_config(config: Config, key: str, value: str) -> int:
     return 0
 
 
+def wrapup_command(args: argparse.Namespace) -> int:
+    from .wrapup import repo_root, write_wrapup
+    repo = Path(args.repo).expanduser().resolve() if args.repo else repo_root(Path.cwd())
+    if not repo or not (repo / ".git").exists():
+        print("No git repo found at or above the current directory. Pass --repo <path>.", file=sys.stderr)
+        return 2
+    focus = args.focus or input("Focus (what this session worked on): ").strip()
+    next_step = args.next_step or input("Next step (one concrete action): ").strip()
+    if not focus or not next_step:
+        print("Focus and next step are required.", file=sys.stderr)
+        return 2
+    blockers = args.blockers if args.blockers is not None else ""
+    path = write_wrapup(repo, focus, next_step, blockers, parked=args.park)
+    print(f"Wrap-up saved: {path}")
+    print("It appears on the dashboard after the next scan (the server rescans every 30s).")
+    return 0
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="coding-control-tower", description="Project-first coding work ledger")
     root.add_argument("--version", action="version", version=__version__)
@@ -100,6 +118,12 @@ def parser() -> argparse.ArgumentParser:
     serve_parser = sub.add_parser("serve", help="Run local dashboard server")
     serve_parser.add_argument("--no-open", action="store_true")
     sub.add_parser("doctor", help="Check environment and adapters")
+    wrapup_parser = sub.add_parser("wrapup", help="Close the session: record focus / next step / blockers for this repo")
+    wrapup_parser.add_argument("--focus", help="What this session worked on")
+    wrapup_parser.add_argument("--next", dest="next_step", help="The one concrete next action")
+    wrapup_parser.add_argument("--blockers", default="", help="Anything stuck (default: none)")
+    wrapup_parser.add_argument("--park", action="store_true", help="Mark as parked (picking up soon)")
+    wrapup_parser.add_argument("--repo", help="Repo path (default: nearest .git ancestor of cwd)")
     config_parser = sub.add_parser("config", help="Show or change configuration")
     config_sub = config_parser.add_subparsers(dest="config_command")
     set_parser = config_sub.add_parser("set")
@@ -119,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "doctor":
         return doctor(config)
+    if args.command == "wrapup":
+        return wrapup_command(args)
     if args.command == "config":
         return set_config(config, args.key, args.value) if args.config_command == "set" else show_config(config)
     if args.command == "serve":

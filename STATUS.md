@@ -6,14 +6,14 @@
 **What it is:** Local, read-only, project-first dashboard — "what am I working on, where did it stop, what's next, which PRs belong to which project." Python ≥3.10, src-layout, zero runtime deps. Public OSS.
 **Updated:** 2026-07-15
 **Branch:** main
-**HEAD:** 13f2468 — formula: sha for retagged v0.2.0
+**HEAD:** (main) — v0.3.0 released
 **Tree:** clean
 
-**Commands:** `PYTHONPATH=src python3 -m pytest tests/ -q` (27 tests) · `PYTHONPATH=src python3 -m coding_control_tower scan` (rebuild snapshot) · `… serve` (dashboard on :7777) · `… doctor` (adapter check).
+**Commands:** `PYTHONPATH=src python3 -m pytest tests/ -q` (34 tests) · `PYTHONPATH=src python3 -m coding_control_tower scan` (rebuild snapshot) · `… serve` (dashboard on :7777) · `… doctor` (adapter check).
 
 ## Current goal
 
-**Mission Control v1 SHIPPED (v0.2.0).** 002 pack fully assembled: 14/14 components,
+**Mission Control v1 + Closure Loop SHIPPED (v0.2.0 → v0.2.1 → v0.3.0, one night).** 002 pack fully assembled: 14/14 components,
 adversary NO BLOCKING ISSUES, SC1-SC8 live-probed green, personal + public deployed.
 
 ## Latest verified evidence
@@ -39,9 +39,9 @@ _none_
 
 ## Next action
 
-- [ ] Confirm background `brew upgrade coding-control-tower` V-gate printed 0.2.0
-      (was running at last save). Then v2 candidates: G4 card detail (runs), tmux
-      deep-link from live-session rows, cross-machine merge.
+- [ ] v2 candidates: crashed-session detection (went-quiet-without-wrapup -> NEEDS YOU),
+      path-keyed project identity (dirname-collision limitation, specs/003), G4 card
+      detail (runs), tmux deep-link, cross-machine merge. brew formula at 0.3.0 both repos.
 
 ---
 _Refresh with `bin/gen-status.rb coding-control-tower` before /save, /park, /wrap-up. Machine header (Updated/Branch/HEAD/Tree) is auto-filled; the prose is yours._

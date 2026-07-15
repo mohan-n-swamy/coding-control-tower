@@ -295,7 +295,9 @@ const next=(isTop&&n.next)||w.next||('Continue: '+task);
 const body=el('div','ls-body');const facts=el('div','nowfacts');
 const wp=el('span');put(wp,el('b','',task),document.createTextNode(' — '),el('code','',x.project||'Unassigned'));
 if(isTop&&n.pr)wp.append(document.createTextNode(' · PR #'+n.pr));
-put(facts,fact('Working on',wp),fact('Stopped at',stop),fact('Next action','▸ '+next,'nextact'));
+const nx=el('span');nx.append(document.createTextNode('▸ '+next+' '));
+if(x.session&&x.source==='Claude'){const cmd=(x.cwd?'cd "'+x.cwd+'" && ':'')+'claude --resume '+x.session;nx.append(copyBtn(cmd,'copy resume command (survives terminal crash)'))}
+put(facts,fact('Working on',wp),fact('Stopped at',stop),fact('Next action',nx,'nextact'));
 const m=el('div','nowmeta');const sp=(k,v,code)=>{const y=el('span');y.append(document.createTextNode(k+' '));y.append(code?el('code','',v):document.createTextNode(v));return y};
 const st=x.startedAt?fmtStamp(x.startedAt):null;const elp=elapsed(x.startedAt,null);
 if(st)m.append(sp('started',st));if(elp)m.append(sp(elp+' elapsed',''));
@@ -304,11 +306,7 @@ if(x.model)m.append(sp('model:',x.model,true));
 m.append(sp('session',String(x.session||'unknown').slice(0,8),true));
 if(x.cwd)m.append(sp('cwd:',x.cwd,true));
 facts.append(m);body.append(facts);
-const btns=el('div','nowmeta');
-if(x.session&&x.source==='Claude'){const cmd=(x.cwd?'cd "'+x.cwd+'" && ':'')+'claude --resume '+x.session;
-const cw=el('span');cw.append(copyBtn(cmd,'copy resume command'));cw.append(document.createTextNode(' resume session'));btns.append(cw)}
-if(proj&&proj.statusMd&&proj.statusMd.present){const cw2=el('span');cw2.append(copyBtn(proj.statusMd.content||'','copy STATUS.md resume prompt'));cw2.append(document.createTextNode(' new session from STATUS.md'));btns.append(cw2)}
-if(btns.childNodes.length)body.append(btns);
+if(proj&&proj.statusMd&&proj.statusMd.present){const btns=el('div','nowmeta');const cw2=el('span');cw2.append(copyBtn(proj.statusMd.content||'','copy STATUS.md resume prompt'));cw2.append(document.createTextNode(' new session from STATUS.md'));btns.append(cw2);body.append(btns)}
 item.append(body)}
 list.append(item)});
 h.append(list)}

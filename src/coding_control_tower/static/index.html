@@ -82,7 +82,10 @@ code,.prnum,.prdate,.pact,.clock,.us-tok,.runs{font-variant-numeric:tabular-nums
 .foot{margin-top:calc(36px*var(--u));padding-top:14px;border-top:1px solid var(--line);text-align:center;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--mute);letter-spacing:.12em}
 .mohan-item{display:flex;gap:10px;align-items:flex-start;background:oklch(from var(--amber) l c h/.07);border:1px solid oklch(from var(--amber) l c h/.3);border-radius:8px;padding:calc(10px*var(--u)) 12px}
 .ls-list{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;display:grid;gap:6px}
-.ls-row{display:flex;align-items:center;gap:8px;font-size:12px}
+.ls-row{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;border:0;background:none;color:inherit;width:100%;text-align:left;padding:4px 6px;border-radius:6px;font-family:inherit}
+.ls-row:hover,.ls-row:focus-visible{background:oklch(from var(--panel2) l c h/.6)}
+.ls-item.is-open .ls-row .chev{transform:rotate(180deg)}
+.ls-body{padding:4px 6px 10px 38px}
 .ls-src{color:var(--dim);font-family:"JetBrains Mono",monospace;font-size:10.5px}
 .ls-age{margin-left:auto;color:var(--mute);font-size:10.5px;font-family:"JetBrains Mono",monospace}
 .mohan-item .led{margin-top:5px}
@@ -236,7 +239,7 @@ const fmtStamp=v=>{if(!v)return'—';const d=new Date(v);if(Number.isNaN(+d))ret
 const fmtTok=n=>{n=Number(n)||0;return n>=1e6?(n/1e6).toFixed(2).replace(/\.?0+$/,'')+'M':n>=1e3?Math.round(n/1e3)+'k':String(n)};
 function tone(s){return {open:'active',draft:'draft',merged:'merged',closed:'failed',active:'active',planning:'planning',attention:'attention',dormant:'idle',history:'idle',idle:'idle'}[s]||'idle'}
 function statusLabel(s){return {open:'Active',draft:'Draft',merged:'Merged',closed:'Closed'}[s]||s||'Unknown'}
-const openProj=new Set(),openPr=new Set();let seeded=false,lastJSON='';
+const openProj=new Set(),openPr=new Set();let seeded=false,lastJSON='',openNowSession=null;
 function taskMeter(items){const total=items.length,done=items.filter(w=>String(w.status||'')==='completed').length;const d=el('span','tmeter');d.title=done+'/'+total+' tasks';const bar=el('span','tbar');const i=el('i');i.style.width=Math.round(100*done/Math.max(1,total))+'%';bar.append(i);put(d,el('span','tnum',done+'/'+total),bar);return d}
 function vbadges(list){if(!list.length)return null;const d=el('div','vrow');list.forEach(v=>{if(v.href){const a=el('a','vb vb-'+v.tone,v.label+' ↗');a.href=v.href;a.target='_blank';a.rel='noreferrer';d.append(a)}else d.append(el('span','vb vb-'+v.tone,v.label))});return d}
 function errbox(e){const d=el('div','errbox');[['Cause',e.cause],['Impact',e.impact],['Next',e.next]].forEach(([k,v])=>{const r=el('div');put(r,el('b','',k),el('span','',v||'Not recorded'));d.append(r)});return d}
@@ -276,14 +279,35 @@ function renderNow(s){const h=$('#heroNow');const live=Array.isArray(s.liveSessi
 h.replaceChildren(mascotHero(working?'working':'idle',working?'WORKING · '+(live.length||1):'IDLE'));
 const bl=el('div','bandlabel','NOW');bl.style.margin='12px 0';h.append(bl);const nf=el('div','nowfacts');
 if(!working){put(nf,fact('Working on','No source-backed active session task.'),fact('Stopped at','Latest project history remains below.'),fact('Next action','Run coding-control-tower after starting work.','nextact'));h.append(nf);return}
-const wp=el('span');put(wp,el('b','',(n&&(n.task||n.title))||'Session'),document.createTextNode(' — '),el('code','',(n&&n.project)||'Unassigned'));if(n&&n.pr)wp.append(document.createTextNode(' · PR #'+n.pr));
-put(nf,fact('Working on',wp),fact('Stopped at',(n&&n.stop)||'Not recorded'),fact('Next action','▸ '+((n&&n.next)||'Not recorded'),'nextact'));
-const m=el('div','nowmeta');const sp=(k,v,code)=>{const x=el('span');x.append(document.createTextNode(k+' '));x.append(code?el('code','',v):document.createTextNode(v));return x};
-if(n){const st=n.startedAt?fmtStamp(n.startedAt):null;const elp=elapsed(n.startedAt,null);
-if(st)m.append(sp('started',st));if(elp)m.append(sp(elp+' elapsed',''));if(n.lastRun)m.append(sp('last run:',n.lastRun,true));if(n.model)m.append(sp('model:',n.model,true));
-m.append(sp('session',String(n.session||'unknown').slice(0,8),true))}
-nf.append(m);h.append(nf);
-if(live.length>1){const list=el('div','ls-list');live.slice(1).forEach(x=>{const r=el('div','ls-row');put(r,mascot('watching',24),el('b','',x.project||'Unassigned'),el('span','ls-src',x.source+(x.model?' · '+x.model:'')),el('span','ls-age',age(x.activityAt)));list.append(r)});h.append(list)}}
+const rows=live.length?live:(n?[{session:n.session,project:n.project,projectId:n.projectId,source:n.source||'Claude',model:n.model,startedAt:n.startedAt,activityAt:n.activityAt,cwd:n.cwd}]:[]);
+const list=el('div','ls-list');
+rows.forEach((x,i)=>{const sid=String(x.session||i);const isOpen=openNowSession===sid;
+const item=el('div','ls-item'+(isOpen?' is-open':''));
+const r=el('button','ls-row');r.setAttribute('aria-expanded',isOpen?'true':'false');
+put(r,mascot(i===0?'working':'watching',24),el('b','',x.project||'Unassigned'),el('span','ls-src',x.source+(x.model?' · '+x.model:'')),el('span','ls-age',age(x.activityAt)),chev());
+r.addEventListener('click',()=>{openNowSession=isOpen?null:sid;if(lastState)renderNow(lastState)});
+item.append(r);
+if(isOpen){const proj=(s.projects||[]).find(p=>p.id===x.projectId);const w=(proj&&proj.wrapup)||{};
+const isTop=!!(n&&String(n.session||'')===String(x.session||''));
+const task=(isTop&&(n.task||n.title))||w.focus||(x.source+' session');
+const stop=(isTop&&n.stop)||w.blockers||'No source-backed stopping point recorded.';
+const next=(isTop&&n.next)||w.next||('Continue: '+task);
+const body=el('div','ls-body');const facts=el('div','nowfacts');
+const wp=el('span');put(wp,el('b','',task),document.createTextNode(' — '),el('code','',x.project||'Unassigned'));
+if(isTop&&n.pr)wp.append(document.createTextNode(' · PR #'+n.pr));
+put(facts,fact('Working on',wp),fact('Stopped at',stop),fact('Next action','▸ '+next,'nextact'));
+const m=el('div','nowmeta');const sp=(k,v,code)=>{const y=el('span');y.append(document.createTextNode(k+' '));y.append(code?el('code','',v):document.createTextNode(v));return y};
+const st=x.startedAt?fmtStamp(x.startedAt):null;const elp=elapsed(x.startedAt,null);
+if(st)m.append(sp('started',st));if(elp)m.append(sp(elp+' elapsed',''));
+if(isTop&&n.lastRun)m.append(sp('last run:',n.lastRun,true));
+if(x.model)m.append(sp('model:',x.model,true));
+m.append(sp('session',String(x.session||'unknown').slice(0,8),true));
+if(x.cwd)m.append(sp('cwd:',x.cwd,true));
+facts.append(m);body.append(facts);
+if(proj&&proj.statusMd&&proj.statusMd.present)body.append(copyBtn(proj.statusMd.content||'','copy resume prompt'));
+item.append(body)}
+list.append(item)});
+h.append(list)}
 function copyBtn(text,label){const b=el('button','copybtn','⧉');b.title=label||'copy';b.addEventListener('click',ev=>{ev.stopPropagation();const done=()=>{b.textContent='✓';setTimeout(()=>b.textContent='⧉',1200)};if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(text).then(done,()=>window.prompt('copy:',text));else window.prompt('copy:',text)});return b}
 function renderMohan(s){const h=$('#heroMohan'),owner=(s.ownerName||'You');const needs=s.needsOwner||s.needsMohan||[];h.replaceChildren(mascotHero('attention','NEEDS '+owner.toUpperCase()+' · '+needs.length));
 if(!needs.length){h.append(el('div','empty','Nothing explicitly waiting on '+(owner==='You'?'you':owner)+'.'));return}

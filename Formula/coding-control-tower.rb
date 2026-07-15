@@ -3,8 +3,8 @@ class CodingControlTower < Formula
 
   desc "Local, project-first dashboard for coding sessions and pull requests"
   homepage "https://github.com/mohan-n-swamy/coding-control-tower"
-  url "https://github.com/mohan-n-swamy/coding-control-tower/archive/refs/tags/v0.2.1.tar.gz"
-  sha256 "eb6f36079ed281b379209a8351350e5e71d5a8107780591cadfb914fa1070b51"
+  url "https://github.com/mohan-n-swamy/coding-control-tower/archive/refs/tags/v0.3.0.tar.gz"
+  sha256 "c379850cebefea63a87923ec94aa04744e98d800733ddf6fd905aef661883e8a"
   license "MIT"
 
   depends_on "python@3.13"

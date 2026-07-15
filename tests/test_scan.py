@@ -76,11 +76,11 @@ class ScanTests(unittest.TestCase):
     def test_build_state_uses_configured_owner_without_optional_adapters(self):
         config = Config(owner_name="Priya", project_roots=[], github_enabled=False)
         empty_usage = {"period": "today", "totalIn": 0, "totalOut": 0, "models": []}
-        with patch("coding_control_tower.scan.discover_repositories", return_value=[]), patch("coding_control_tower.scan.collect_claude", return_value=([], [])), patch("coding_control_tower.scan.collect_codex", return_value=[]), patch("coding_control_tower.scan.collect_github", return_value=([], {"enabled": False, "count": 0})), patch("coding_control_tower.scan.collect_usage", return_value=empty_usage):
+        with patch("coding_control_tower.scan.discover_repositories", return_value=[]), patch("coding_control_tower.scan.collect_claude", return_value=([], [])), patch("coding_control_tower.scan.collect_codex", return_value=[]), patch("coding_control_tower.scan.collect_github", return_value=([], {"enabled": False, "count": 0})), patch("coding_control_tower.scan.collect_usage", return_value=empty_usage), patch("coding_control_tower.scan.collect_live_sessions", return_value=[]), patch("coding_control_tower.scan.collect_decisions", return_value=[]):
             state = build_state(config)
         self.assertEqual(state["ownerName"], "Priya")
         self.assertEqual(state["projects"], [])
-        self.assertEqual(state["usage"], empty_usage)
+        self.assertEqual(state["usage"], {**empty_usage, "untracked": []})
         self.assertNotIn("needsMohan", state)
 
     def test_collect_usage_aggregates_todays_model_tokens(self):
@@ -220,6 +220,19 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(state["schema_version"], 2)
         self.assertEqual(state["needsOwner"][0]["kind"], "decision")
         self.assertIn("liveSessions", state)
+
+    def test_usage_merge_recomputes_share_and_flags_untracked_codex(self):
+        from coding_control_tower.scan import _merge_usage
+        base = {"period": "today", "totalIn": 900, "totalOut": 100,
+                "models": [{"provider": "Anthropic", "model": "claude-opus-4-8", "tin": 900, "tout": 100, "share": 100}]}
+        ext = [{"provider": "Z.ai", "model": "glm-5.2", "tin": 800, "tout": 200, "approx": True}]
+        live = [{"source": "Codex"}, {"source": "Claude"}]
+        merged = _merge_usage(base, ext, live)
+        self.assertEqual(merged["totalIn"], 1700)
+        self.assertEqual(sum(r["share"] for r in merged["models"]), 100)
+        self.assertTrue(any(r["approx"] for r in merged["models"]))
+        self.assertFalse(merged["models"][0]["approx"])  # Claude row exact
+        self.assertEqual(merged["untracked"], ["Codex"])
 
 
 class AdapterLoaderTests(unittest.TestCase):

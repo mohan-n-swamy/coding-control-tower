@@ -500,6 +500,30 @@ def collect_usage(config: Config) -> dict[str, Any]:
     }
 
 
+def _merge_usage(usage: dict[str, Any], external_rows: list[dict[str, Any]],
+                 live: list[dict[str, Any]]) -> dict[str, Any]:
+    """Fold external adapter usage rows into the Claude-scanned usage block."""
+    models = list(usage.get("models") or [])
+    for row in models:
+        row.setdefault("approx", False)
+    models.extend(external_rows)
+    grand = sum(row["tin"] + row["tout"] for row in models)
+    for row in models:
+        row["share"] = round(100 * (row["tin"] + row["tout"]) / grand) if grand else 0
+    models.sort(key=lambda row: row["tin"] + row["tout"], reverse=True)
+    tracked_providers = {row["provider"] for row in models}
+    live_sources = {item["source"] for item in live}
+    untracked = sorted(source for source in live_sources
+                       if source == "Codex" and "OpenAI" not in tracked_providers)
+    return {
+        "period": usage.get("period", "today"),
+        "totalIn": sum(row["tin"] for row in models),
+        "totalOut": sum(row["tout"] for row in models),
+        "models": models[:10],
+        "untracked": untracked,
+    }
+
+
 def parse_pr(value: Any) -> int | None:
     match = PR_RE.search(str(value or ""))
     return int(match.group(1)) if match else None
@@ -775,7 +799,7 @@ def build_state(config: Config, refresh_github: bool = False) -> dict[str, Any]:
         "summary": {"running": running, "needs_review": 0, "failed": len(needs), "idle": running == 0},
         "skipped_files": 0, "now": _derive_now_v2(live, derive_now(projects), by_id), "needsOwner": needs,
         "liveSessions": live, "adapterErrors": adapter_errors,
-        "usage": collect_usage(config),
+        "usage": _merge_usage(collect_usage(config), external.get("usage_models") or [], live),
         "github": github, "projects": projects,
         "tasks": [item for item in claude_work if item["type"] == "task"],
         "workflows": [item for item in claude_work if item["type"] == "workflow"],

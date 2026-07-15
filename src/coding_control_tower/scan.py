@@ -241,6 +241,8 @@ def collect_codex(config: Config) -> list[dict[str, Any]]:
                 continue
             first = path.open("r", encoding="utf-8", errors="replace").readline()
             row = json.loads(first)
+            if not isinstance(row, dict):
+                continue
             payload = row.get("payload") or {}
             if row.get("type") != "session_meta" or payload.get("thread_source") == "subagent":
                 continue
@@ -276,6 +278,8 @@ def _claude_session_probe(path: Path) -> dict[str, Any]:
             row = json.loads(line)
         except ValueError:
             continue
+        if not isinstance(row, dict):
+            continue
         started = started or row.get("timestamp")
         cwd = cwd or row.get("cwd")
         if started and cwd:
@@ -284,6 +288,8 @@ def _claude_session_probe(path: Path) -> dict[str, Any]:
         try:
             row = json.loads(line)
         except ValueError:
+            continue
+        if not isinstance(row, dict):
             continue
         cwd = row.get("cwd") or cwd
         message = row.get("message") if isinstance(row.get("message"), dict) else {}
@@ -325,6 +331,8 @@ def collect_live_sessions(config: Config, repos: list[dict[str, Any]]) -> list[d
                     continue
                 first = path.open("r", encoding="utf-8", errors="replace").readline()
                 row = json.loads(first)
+                if not isinstance(row, dict):
+                    continue
                 payload = row.get("payload") or {}
                 if row.get("type") != "session_meta" or payload.get("thread_source") == "subagent":
                     continue
@@ -363,6 +371,8 @@ def _pending_blockers(path: Path) -> list[dict[str, Any]]:
                 row = json.loads(line)
             except ValueError:
                 continue
+            if not isinstance(row, dict):
+                continue
             cwd = row.get("cwd") or cwd
             message = row.get("message") if isinstance(row.get("message"), dict) else {}
             content = message.get("content")
@@ -372,6 +382,8 @@ def _pending_blockers(path: Path) -> list[dict[str, Any]]:
                 if not isinstance(block, dict):
                     continue
                 if block.get("type") == "tool_use" and block.get("name") in BLOCKING_TOOLS:
+                    if not block.get("id"):
+                        continue  # id-less block would key as 'None' and collide
                     question = ""
                     if block.get("name") == "AskUserQuestion":
                         questions = (block.get("input") or {}).get("questions") or []
@@ -383,7 +395,7 @@ def _pending_blockers(path: Path) -> list[dict[str, Any]]:
                         "id": str(block.get("id")), "name": str(block.get("name")),
                         "question": question[:200], "askedAt": row.get("timestamp"), "cwd": cwd,
                     }
-                elif block.get("type") == "tool_result":
+                elif block.get("type") == "tool_result" and block.get("tool_use_id"):
                     pending.pop(str(block.get("tool_use_id")), None)
     return list(pending.values())
 

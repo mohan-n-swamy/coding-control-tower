@@ -502,19 +502,53 @@ def body_section(body: str, labels: Iterable[str]) -> str | None:
     return clean[:500] or None
 
 
+CHECKBOX_RE = re.compile(r"(?im)^\s*[-*]\s*\[( |x|X)\]\s+(.+?)\s*$")
+
+
+def parse_body_tasks(body: str) -> dict[str, Any] | None:
+    """PR-body markdown checklist -> design tasks shape, or None if no checklist."""
+    items = [{"t": match.group(2)[:160], "done": match.group(1).lower() == "x"}
+             for match in CHECKBOX_RE.finditer(body or "")]
+    if not items:
+        return None
+    return {"done": sum(1 for item in items if item["done"]), "total": len(items), "items": items[:20]}
+
+
+def _pr_verification(pr: dict[str, Any]) -> list[dict[str, Any]]:
+    """Data-driven badges from scanned facts ONLY — never invented."""
+    badges: list[dict[str, Any]] = []
+    if pr.get("outcome"):
+        badges.append({"tone": "ok", "label": "Outcome claimed · PR body"})
+    elif pr.get("status") == "merged":
+        badges.append({"tone": "wait", "label": "Merged — no delivery proof in body"})
+    if pr.get("status") == "closed":
+        badges.append({"tone": "fail", "label": "Closed — not built"})
+    if pr.get("url"):
+        badges.append({"tone": "link", "label": "OPEN ON GITHUB", "href": pr["url"]})
+    return badges
+
+
 def normalize_pr(raw: dict[str, Any]) -> dict[str, Any]:
     repo = raw.get("repository") or {}
     status = "draft" if raw.get("isDraft") else str(raw.get("state") or "closed").lower()
     body = str(raw.get("body") or "")
     summary = body_section(body, ("Summary", "What", "Fix", "Problem")) or str(raw.get("title") or "")
     outcome = body_section(body, ("Outcome", "Delivered", "Deploy state", "Done proof"))
-    return {
-        "number": int(raw.get("number") or 0), "title": str(raw.get("title") or "Untitled PR")[:240],
-        "status": status, "createdAt": raw.get("createdAt"), "updatedAt": raw.get("updatedAt") or raw.get("closedAt"),
+    number = int(raw.get("number") or 0)
+    progress = body_section(CHECKBOX_RE.sub("", body), ("Where it stands", "Status", "Progress")) or summary
+    status_label = {"open": "Active", "draft": "Draft", "merged": "Merged", "closed": "Failed — not built"}.get(status, status.title())
+    pr = {
+        "number": number, "num": number, "title": str(raw.get("title") or "Untitled PR")[:240],
+        "status": status, "statusLabel": status_label,
+        "createdAt": raw.get("createdAt"), "updatedAt": raw.get("updatedAt") or raw.get("closedAt"),
         "url": raw.get("url"), "repoName": str(repo.get("name") or ""), "repoFullName": str(repo.get("nameWithOwner") or ""),
-        "summary": summary[:280], "claimedOutcome": outcome, "claimSource": "PR body" if outcome else None,
+        "summary": summary[:280], "progress": progress[:280],
+        "claimedOutcome": outcome, "outcome": outcome, "claimSource": "PR body" if outcome else None,
+        "tasks": parse_body_tasks(body), "runs": None, "error": None,
         "workItems": [],
     }
+    pr["verification"] = _pr_verification(pr)
+    return pr
 
 
 def collect_github(config: Config, refresh: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -629,6 +663,14 @@ def assemble(config: Config, repos: list[dict[str, Any]], work: list[dict[str, A
                 by_number[number]["workItems"].append(item)
             else:
                 local.append(item)
+        for pr in project["prs"]:
+            if pr.get("workItems") and not pr.get("tasks"):
+                # session task files are the fresher truth when the body has no checklist
+                items = [{"t": str(w.get("title") or "Untitled")[:160],
+                          "done": str(w.get("status") or "") == "completed"}
+                         for w in pr["workItems"]]
+                pr["tasks"] = {"done": sum(1 for i in items if i["done"]),
+                               "total": len(items), "items": items[:20]}
         project["localWork"] = sorted(local, key=lambda item: timestamp(item.get("activityAt")), reverse=True)
         project["prs"].sort(key=lambda pr: timestamp(pr.get("updatedAt")), reverse=True)
         open_prs = sum(pr.get("status") in ("open", "draft") for pr in project["prs"])

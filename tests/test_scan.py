@@ -171,6 +171,26 @@ class ScanTests(unittest.TestCase):
             out = collect_decisions(Config(claude_dir=tmp), [])
         self.assertEqual(out, [])
 
+    def test_body_checklist_becomes_tasks_and_contract_names(self):
+        from coding_control_tower.scan import normalize_pr
+        raw = {"number": 81, "title": "Retry queue", "state": "open",
+               "url": "https://x", "repository": {"name": "alpha", "nameWithOwner": "o/alpha"},
+               "body": "## Where it stands\nDraining fine.\n- [x] migration\n- [ ] jitter test\n"}
+        pr = normalize_pr(raw)
+        self.assertEqual(pr["num"], 81)
+        self.assertEqual(pr["statusLabel"], "Active")
+        self.assertEqual(pr["progress"], "Draining fine.")
+        self.assertEqual(pr["tasks"], {"done": 1, "total": 2, "items": [
+            {"t": "migration", "done": True}, {"t": "jitter test", "done": False}]})
+        self.assertEqual(pr["verification"][-1]["tone"], "link")
+
+    def test_merged_without_outcome_gets_wait_badge_never_ok(self):
+        from coding_control_tower.scan import normalize_pr
+        pr = normalize_pr({"number": 9, "title": "x", "state": "merged", "repository": {}, "body": ""})
+        tones = [b["tone"] for b in pr["verification"]]
+        self.assertIn("wait", tones)
+        self.assertNotIn("ok", tones)
+
 
 class AdapterLoaderTests(unittest.TestCase):
     def test_valid_adapter_contributes_and_bad_keys_dropped(self):

@@ -191,6 +191,36 @@ class ScanTests(unittest.TestCase):
         self.assertIn("wait", tones)
         self.assertNotIn("ok", tones)
 
+    def test_dormant_split_and_bucket_pin_preserved(self):
+        old = {"id": "old", "name": "Old", "path": "/w/old", "repoName": "old", "branch": "main"}
+        fresh = {"id": "fresh", "name": "Fresh", "path": "/w/fresh", "repoName": "fresh", "branch": "main"}
+        work = [
+            {"type": "task", "source": "Claude", "session": "s1", "cwd": "/w/fresh/x", "title": "t",
+             "status": "completed", "activityAt": iso_now(), "prNumber": None},
+            {"type": "task", "source": "Claude", "session": "s2", "cwd": None, "title": "orphan",
+             "status": "in_progress", "activityAt": iso_now(), "prNumber": None},
+        ]
+        projects = assemble(Config(archive_days=30), [old, fresh], work, [], [])
+        states = {p["id"]: p["state"] for p in projects}
+        self.assertEqual(states["fresh"], "dormant")   # touched today, idle
+        self.assertEqual(states["old"], "history")     # never touched
+        self.assertEqual(states["unassigned"], "history")  # pin holds
+
+    def test_decisions_sort_before_failures_in_needs(self):
+        from coding_control_tower.scan import build_state
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch("coding_control_tower.scan.discover_repositories", return_value=[]), \
+             patch("coding_control_tower.scan.collect_claude", return_value=([], [])), \
+             patch("coding_control_tower.scan.collect_codex", return_value=[]), \
+             patch("coding_control_tower.scan.collect_github", return_value=([], {"enabled": False, "count": 0})), \
+             patch("coding_control_tower.scan.collect_usage", return_value={"period": "today", "totalIn": 0, "totalOut": 0, "models": []}), \
+             patch("coding_control_tower.scan.collect_live_sessions", return_value=[]), \
+             patch("coding_control_tower.scan.collect_decisions", return_value=[{"kind": "decision", "ask": "Q?", "askedAt": iso_now(), "activityAt": iso_now(), "project": "p", "projectId": "p", "session": "s", "source": "Claude", "resumeCmd": "claude --resume s", "blocks": "session s"}]):
+            state = build_state(Config(claude_dir=tmp))
+        self.assertEqual(state["schema_version"], 2)
+        self.assertEqual(state["needsOwner"][0]["kind"], "decision")
+        self.assertIn("liveSessions", state)
+
 
 class AdapterLoaderTests(unittest.TestCase):
     def test_valid_adapter_contributes_and_bad_keys_dropped(self):

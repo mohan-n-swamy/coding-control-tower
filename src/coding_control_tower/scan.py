@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from .config import Config, state_dir
 from .paths import pr_cache_path, snapshot_path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ACTIVE_HOURS = 6
 HISTORY_DAYS = 30
 PR_CACHE_SECONDS = 900
@@ -692,6 +692,12 @@ def assemble(config: Config, repos: list[dict[str, Any]], work: list[dict[str, A
         if project["state"] == "history" and open_prs:
             project["state"] = "planning"
         project["provenance"] = list({(p["source"], p["session"], p["method"]): p for p in project["provenance"]}.values())
+    dormant_cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=max(1, config.archive_days))
+    for project in projects.values():
+        if project["state"] == "history" and project["id"] != "unassigned":
+            parsed = parse_time(project.get("activityAt"))
+            if parsed and parsed >= dormant_cutoff:
+                project["state"] = "dormant"
     return sorted(projects.values(), key=lambda project: (0 if project["hasActiveTask"] else 1, -timestamp(project.get("activityAt"))))
 
 
@@ -707,21 +713,68 @@ def derive_now(projects: list[dict[str, Any]]) -> dict[str, Any] | None:
     return None
 
 
+def _derive_now_v2(live: list[dict[str, Any]], legacy_now: dict[str, Any] | None,
+                   by_id: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """NowFacts contract: top live session, enriched with its project's wrapup.
+    Falls back to the legacy task-derived now when no session is live."""
+    if not live:
+        return legacy_now
+    top = live[0]
+    project = by_id.get(top.get("projectId") or "")
+    wrapup = (project or {}).get("wrapup") or {}
+    task = wrapup.get("focus") or f"{top['source']} session"
+    return {
+        "projectId": top.get("projectId"), "project": top.get("project") or "Unassigned",
+        "task": task, "pr": parse_pr(wrapup.get("next") or wrapup.get("focus")),
+        "startedAt": top.get("startedAt"), "activityAt": top.get("activityAt"),
+        "stop": wrapup.get("blockers") or "No source-backed stopping point recorded.",
+        "next": wrapup.get("next") or f"Continue: {task}",
+        "lastRun": None, "model": top.get("model"),
+        "session": top.get("session"), "source": top.get("source"),
+        "correlation": "observed" if top.get("projectId") else "unassigned",
+        "title": task,  # v1 alias (frontend legacy path reads now.title)
+    }
+
+
 def build_state(config: Config, refresh_github: bool = False) -> dict[str, Any]:
+    from .adapters import load_external, run_collectors
     repos = discover_repositories(config)
     claude_work, failures = collect_claude(config)
     codex_work = collect_codex(config)
     prs, github = collect_github(config, refresh_github)
     projects = assemble(config, repos, claude_work + codex_work, failures, prs)
+    live = collect_live_sessions(config, repos)
+    decisions = collect_decisions(config, repos)
+    collectors, load_errors = load_external(config)
+    external, run_errors = run_collectors(collectors, config)
+    adapter_errors = load_errors + run_errors
+    wrapups = external.get("wrapups") or {}
+    by_id = {project["id"]: project for project in projects}
+    for project_id, wrapup in wrapups.items():
+        if project_id in by_id:
+            by_id[project_id]["wrapup"] = wrapup
+    for project in projects:
+        project.setdefault("wrapup", None)
+        status_path = Path(project["path"]) / "STATUS.md" if project.get("path") else None
+        if status_path and status_path.is_file():
+            try:
+                project["statusMd"] = {"present": True, "updatedAt": iso_mtime(status_path),
+                                       "content": status_path.read_text(encoding="utf-8", errors="replace")[:8192]}
+            except OSError:
+                project["statusMd"] = None
+        else:
+            project["statusMd"] = None
     needs = [{"projectId": project["id"], "project": project["name"], **item} for project in projects for item in project["needsAction"]]
     needs.sort(key=lambda item: timestamp(item.get("activityAt")), reverse=True)
+    needs = decisions + needs  # decisions FIRST — the queue's whole point
     running = sum(project["hasActiveTask"] for project in projects)
     state = {
         "schema_version": SCHEMA_VERSION, "scanner_version": "0.1.0", "generated_at": iso_now(),
-        "config": {"stale_threshold_ms": 900_000, "poll_interval_ms": 3_000, "timezone": config.timezone or ""},
+        "config": {"stale_threshold_ms": 900_000, "poll_interval_ms": 3_000, "timezone": config.timezone or "", "archive_days": config.archive_days},
         "ownerName": config.owner_name or "You", "mood": "concerned" if needs else "watching" if running else "sleeping",
         "summary": {"running": running, "needs_review": 0, "failed": len(needs), "idle": running == 0},
-        "skipped_files": 0, "now": derive_now(projects), "needsOwner": needs,
+        "skipped_files": 0, "now": _derive_now_v2(live, derive_now(projects), by_id), "needsOwner": needs,
+        "liveSessions": live, "adapterErrors": adapter_errors,
         "usage": collect_usage(config),
         "github": github, "projects": projects,
         "tasks": [item for item in claude_work if item["type"] == "task"],

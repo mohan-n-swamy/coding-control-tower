@@ -5,8 +5,8 @@
 **Repo:** `~/code workshop/claude projects/Orange Health/coding-control-tower` (`cd` here first)
 **What it is:** Local, read-only, project-first dashboard — "what am I working on, where did it stop, what's next, which PRs belong to which project." Python ≥3.10, src-layout, zero runtime deps. Public OSS.
 **Updated:** 2026-07-15
-**Branch:** main
-**HEAD:** 8782938 — chore(brew): pin real v0.1.0 tarball sha256 in Formula
+**Branch:** specs/002-mission-control-build
+**HEAD:** a6e331d — docs: STATUS.md — pack merged, next: manufacture assemble 002
 **Tree:** clean
 
 **Commands:** `PYTHONPATH=src python3 -m pytest tests/ -q` (16 tests) · `PYTHONPATH=src python3 -m coding_control_tower scan` (rebuild snapshot) · `… serve` (dashboard on :7777) · `… doctor` (adapter check).

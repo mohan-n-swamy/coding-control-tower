@@ -51,24 +51,18 @@ inventing one — that honesty rule shapes every panel.
 
 ## Install
 
-With pip (or pipx):
-
-```bash
-pipx install coding-control-tower
-# or
-python -m pip install --user coding-control-tower
-```
-
 With Homebrew:
 
 ```bash
 brew install mohan-n-swamy/tap/coding-control-tower
 ```
 
-From source:
+With pip (or pipx), straight from GitHub:
 
 ```bash
-pipx install git+https://github.com/mohan-n-swamy/coding-control-tower.git
+pipx install git+https://github.com/mohan-n-swamy/coding-control-tower.git@v0.3.0
+# or
+python -m pip install --user git+https://github.com/mohan-n-swamy/coding-control-tower.git@v0.3.0
 ```
 
 Then configure and run:

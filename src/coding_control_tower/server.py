@@ -16,7 +16,7 @@ from .scan import scan
 
 
 class TowerHandler(BaseHTTPRequestHandler):
-    server_version = "CodingControlTower/0.1"
+    server_version = "CodingControlTower/0.2"
 
     def do_GET(self) -> None:  # noqa: N802
         route = urllib.parse.urlparse(self.path).path

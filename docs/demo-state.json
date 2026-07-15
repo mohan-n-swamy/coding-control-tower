@@ -1,85 +1,547 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_at": "2099-07-14T10:44:00Z",
-  "config": {"stale_threshold_ms": 900000},
-  "ownerName": "Alex",
-  "mood": "concerned",
-  "now": {
-    "projectId": "checkout-reliability",
-    "project": "Checkout Reliability",
-    "title": "Verify retry handling after payment timeout",
-    "stoppedAt": "Integration tests pass; production replay still pending.",
-    "next": "Run the production-safe replay and attach evidence to PR #184",
-    "activityAt": "2099-07-14T10:41:00Z",
-    "session": "7f42a9ce-demo",
-    "correlation": "observed"
+  "config": {
+    "stale_threshold_ms": 900000,
+    "poll_interval_ms": 3000,
+    "timezone": "",
+    "archive_days": 30
   },
-  "needsOwner": [
-    {
-      "projectId": "support-console",
-      "project": "Support Console",
-      "kind": "workflow_failure",
-      "title": "Release verification",
-      "activityAt": "2099-07-14T09:52:00Z",
-      "error": {"cause": "Choose whether to retry the staging deployment", "impact": "Release remains on staging.", "next": "Inspect failed check, then retry or stop."}
-    }
-  ],
-  "github": {"enabled": true, "available": true, "generatedAt": "2099-07-14T10:40:00Z", "count": 4, "error": null},
+  "ownerName": "Alex",
+  "adapterErrors": [],
+  "now": {
+    "project": "freshchat-bot",
+    "projectId": "fcb",
+    "task": "Harden webhook retry queue",
+    "pr": 81,
+    "startedAt": "2099-07-14T09:12:00Z",
+    "activityAt": "2099-07-14T10:41:00Z"
+  },
   "usage": {
     "period": "today",
     "totalIn": 2150000,
     "totalOut": 322000,
     "models": [
-      {"provider": "Anthropic", "model": "claude-sonnet-4-5", "tin": 1200000, "tout": 184000, "share": 62},
-      {"provider": "Anthropic", "model": "claude-opus-4-1", "tin": 310000, "tout": 42000, "share": 21},
-      {"provider": "OpenAI", "model": "gpt-4.1-mini", "tin": 640000, "tout": 96000, "share": 17}
-    ]
+      {
+        "provider": "Anthropic",
+        "model": "claude-sonnet-4-5",
+        "tin": 1200000,
+        "tout": 184000,
+        "share": 62,
+        "approx": false
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-opus-4-1",
+        "tin": 310000,
+        "tout": 42000,
+        "share": 21,
+        "approx": false
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-4.1-mini",
+        "tin": 640000,
+        "tout": 96000,
+        "share": 15
+      },
+      {
+        "provider": "Z.ai",
+        "model": "glm-5.2",
+        "tin": 41000,
+        "tout": 9000,
+        "share": 2,
+        "approx": true
+      }
+    ],
+    "untracked": ["Codex"]
   },
-  "tasks": [{}, {}],
-  "workflows": [{}],
-  "skipped_files": 0,
+  "needsOwner": [
+    {
+      "kind": "decision",
+      "project": "coding-control-tower",
+      "ask": "Choose ledger storage: repo-local .tower/ vs global ~/.tower",
+      "blocks": "PR #13 (draft) — session ledger sync",
+      "askedAt": "2099-07-12T10:44:00Z",
+      "session": "sess-demo-001",
+      "resumeCmd": "claude --resume sess-demo-001"
+    },
+    {
+      "kind": "decision",
+      "project": "golden-flow",
+      "ask": "Product call: allow guest checkout in the v2 address step?",
+      "blocks": "PR #33 — checkout flow v2",
+      "askedAt": "2099-07-13T15:44:00Z",
+      "session": "sess-demo-002",
+      "resumeCmd": "claude --resume sess-demo-002"
+    }
+  ],
+  "liveSessions": [
+    {
+      "source": "Claude",
+      "model": "claude-sonnet-4-5",
+      "project": "freshchat-bot",
+      "projectId": "fcb",
+      "startedAt": "2099-07-14T09:12:00Z",
+      "activityAt": "2099-07-14T10:41:00Z"
+    },
+    {
+      "source": "Codex",
+      "project": "Golden Flow",
+      "projectId": "gf",
+      "startedAt": "2099-07-14T09:35:00Z",
+      "activityAt": "2099-07-14T10:38:00Z"
+    },
+    {
+      "source": "Claude",
+      "projectId": null,
+      "startedAt": "2099-07-14T10:15:00Z",
+      "activityAt": "2099-07-14T10:42:00Z"
+    }
+  ],
   "projects": [
     {
-      "id": "checkout-reliability",
-      "name": "Checkout Reliability",
-      "path": "~/work/checkout-reliability",
-      "branch": "fix/payment-retry",
+      "id": "fcb",
+      "name": "Freshchat Bot",
+      "path": "~/dev/freshchat-bot",
+      "branch": "fix/webhook-retry-81",
       "state": "active",
-      "activityAt": "2099-07-14T10:41:00Z",
-      "hasActiveTask": true,
-      "hasRunningWorkflow": false,
-      "counts": {"openPRs": 1, "mergedPRs": 1, "failedRuns": 0},
       "prs": [
-        {"number": 184, "title": "Make payment retry idempotent", "status": "open", "updatedAt": "2099-07-14T10:38:00Z", "summary": "Adds idempotency keys and a bounded retry policy.", "claimedOutcome": null, "url": "https://github.com/example/checkout/pull/184", "workItems": [{"title": "Verify retry handling after payment timeout", "status": "in_progress"}, {"title": "Add idempotency keys to payment retry", "status": "completed"}]},
-        {"number": 179, "title": "Add timeout telemetry", "status": "merged", "updatedAt": "2099-07-13T17:10:00Z", "summary": "Records gateway timeout cause and retry count.", "claimedOutcome": "Timeout cause is visible in the operations dashboard.", "url": "https://github.com/example/checkout/pull/179", "workItems": []}
+        {
+          "num": 81,
+          "number": 81,
+          "title": "Webhook retry queue with exponential backoff",
+          "status": "active",
+          "statusLabel": "Active",
+          "date": "opened Jul 12",
+          "updated": "updated 24m ago",
+          "progress": "In progress — retries land in queue and drain; jitter test still flaky.",
+          "outcome": null,
+          "verification": [
+            { "tone": "wait", "label": "CI · 2/3 checks, 1 pending" }
+          ],
+          "tasks": {
+            "done": 4,
+            "total": 6,
+            "items": [
+              { "t": "Queue table migration", "done": true },
+              { "t": "Backoff calculator (base 2s, cap 5m)", "done": true },
+              { "t": "Retry worker + dead-letter handoff", "done": true },
+              { "t": "Wire retries into webhook handler", "done": true },
+              { "t": "Jitter-bounds test (flaky — current)", "done": false },
+              { "t": "Runbook note in docs/ops.md", "done": false }
+            ]
+          },
+          "runs": [
+            { "label": "pytest 47/48", "time": "10:41", "ok": false },
+            { "label": "pytest 44/48", "time": "09:58", "ok": false },
+            { "label": "ruff + mypy clean", "time": "09:31", "ok": true }
+          ]
+        },
+        {
+          "num": 79,
+          "number": 79,
+          "title": "Dedupe inbound message events",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jul 9",
+          "updated": null,
+          "progress": null,
+          "outcome": "Duplicate bot replies eliminated — inbound events are idempotent via an event-id cache (24h TTL).",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Verified in staging · Jul 9" },
+            { "tone": "link", "label": "Screenshot", "href": "#" }
+          ],
+          "tasks": {
+            "done": 6,
+            "total": 6
+          },
+          "runs": [
+            { "label": "pytest 52/52", "time": "Jul 9 16:02", "ok": true }
+          ]
+        },
+        {
+          "num": 74,
+          "number": 74,
+          "title": "Rate-limit Freshchat API client",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jul 2",
+          "updated": null,
+          "progress": null,
+          "outcome": "API 429s dropped to zero under burst load; client honors Retry-After headers.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Load test 500 rpm · pass" }
+          ],
+          "tasks": {
+            "done": 5,
+            "total": 5
+          },
+          "runs": [
+            { "label": "pytest 49/49", "time": "Jul 2 11:20", "ok": true }
+          ]
+        },
+        {
+          "num": 71,
+          "number": 71,
+          "title": "Structured logging for webhook handlers",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 26",
+          "updated": null,
+          "progress": null,
+          "outcome": "Every webhook request traceable by request-id; JSON logs ship to Loki.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Log queries verified in Grafana · Jun 26" }
+          ],
+          "tasks": {
+            "done": 3,
+            "total": 3
+          },
+          "runs": [
+            { "label": "pytest 46/46", "time": "Jun 26 10:05", "ok": true }
+          ]
+        },
+        {
+          "num": 68,
+          "number": 68,
+          "title": "Migrate bot config to pydantic-settings",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 19",
+          "updated": null,
+          "progress": null,
+          "outcome": "Config typos fail fast at boot instead of at runtime; .env schema documented.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Boot check on staging · Jun 19" }
+          ],
+          "tasks": {
+            "done": 4,
+            "total": 4
+          },
+          "runs": [
+            { "label": "pytest 45/45", "time": "Jun 19 15:40", "ok": true }
+          ]
+        },
+        {
+          "num": 65,
+          "number": 65,
+          "title": "Conversation-context window pruning",
+          "status": "failed",
+          "statusLabel": "Failed — not built",
+          "date": "closed Jun 12",
+          "updated": null,
+          "progress": null,
+          "outcome": null,
+          "error": {
+            "cause": "Pruning dropped system messages, breaking bot persona in 3/10 test convos",
+            "impact": "No artifact shipped — feature was never built",
+            "next": "Redo with role-aware pruning; superseded by planned PR"
+          },
+          "verification": [
+            { "tone": "fail", "label": "QA failed — never shipped" }
+          ],
+          "tasks": {
+            "done": 3,
+            "total": 4
+          },
+          "runs": [
+            { "label": "convo eval 7/10", "time": "Jun 12 13:02", "ok": false }
+          ]
+        }
       ],
-      "localWork": []
+      "local": [
+        { "t": "Rotated staging API keys", "date": "Jul 8", "note": ".env.staging updated — secrets stay local, no PR" }
+      ],
+      "statusMd": {
+        "present": true,
+        "updatedAt": "2099-07-14T09:00:00Z",
+        "content": "# freshchat-bot — STATUS\n\n## Current work\nHarden webhook retry queue (PR #81) — retries land in queue and drain; jitter test still flaky.\n\n## Blocker\nJitter-bounds assertion flaky (fails ~1 in 5 runs).\n\n## Next step\nPin RNG seed in test_backoff_jitter, re-run pytest -k retry\n\n---\n_Demo resume prompt for showcase purposes_"
+      },
+      "wrapup": {
+        "focus": "Harden webhook retry queue",
+        "next": "Pin RNG seed in test_backoff_jitter, re-run pytest -k retry",
+        "blockers": "jitter-bounds assertion flaky",
+        "at": "2099-07-14T09:12:00Z",
+        "path": "notes/sessions/demo.md"
+      }
     },
     {
-      "id": "support-console",
-      "name": "Support Console",
-      "path": "~/work/support-console",
-      "branch": "release/2.4",
+      "id": "gf",
+      "name": "Golden Flow",
+      "path": "~/dev/golden-flow",
+      "branch": "feat/checkout-v2",
+      "state": "planning",
+      "prs": [
+        {
+          "num": 33,
+          "number": 33,
+          "title": "Checkout v2 — address step",
+          "status": "draft",
+          "statusLabel": "Draft",
+          "date": "opened Jul 11",
+          "updated": "updated Jul 13",
+          "progress": "Blocked on guest-checkout decision (see NEEDS MOHAN). Address form + validation done; save path pending.",
+          "outcome": null,
+          "verification": [
+            { "tone": "ok", "label": "CI green on draft" }
+          ],
+          "tasks": {
+            "done": 3,
+            "total": 7
+          },
+          "runs": [
+            { "label": "vitest 31/31", "time": "Jul 13 17:45", "ok": true }
+          ]
+        },
+        {
+          "num": 29,
+          "number": 29,
+          "title": "Golden-path smoke suite",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 28",
+          "updated": null,
+          "progress": null,
+          "outcome": "Checkout golden path covered end-to-end; suite runs in CI on every PR (2m 40s).",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "12/12 scenarios vs staging · Jun 28" }
+          ],
+          "tasks": {
+            "done": 8,
+            "total": 8
+          },
+          "runs": [
+            { "label": "playwright 12/12", "time": "Jun 28 14:10", "ok": true }
+          ]
+        },
+        {
+          "num": 27,
+          "number": 27,
+          "title": "Cart state — server reconciliation",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 20",
+          "updated": null,
+          "progress": null,
+          "outcome": "Cart survives refresh and multi-tab; server is source of truth with optimistic UI.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Multi-tab manual pass · Jun 20" }
+          ],
+          "tasks": {
+            "done": 6,
+            "total": 6
+          },
+          "runs": [
+            { "label": "vitest 29/29", "time": "Jun 20 12:30", "ok": true }
+          ]
+        },
+        {
+          "num": 24,
+          "number": 24,
+          "title": "Design tokens → CSS variables",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 11",
+          "updated": null,
+          "progress": null,
+          "outcome": "All colors/spacing flow from tokens.css; dark mode now a one-file switch.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "link", "label": "Before/after screenshots", "href": "#" }
+          ],
+          "tasks": {
+            "done": 5,
+            "total": 5
+          },
+          "runs": [
+            { "label": "vitest 27/27", "time": "Jun 11 09:55", "ok": true }
+          ]
+        }
+      ],
+      "local": [
+        { "t": "Upgraded Playwright 1.44 → 1.46", "date": "Jul 5", "note": "Lockfile bump only; suite green, no PR needed" }
+      ],
+      "statusMd": null,
+      "wrapup": null
+    },
+    {
+      "id": "cct",
+      "name": "Coding Control Tower",
+      "path": "~/dev/coding-control-tower",
+      "branch": "main",
       "state": "attention",
-      "activityAt": "2099-07-14T09:52:00Z",
-      "hasActiveTask": false,
-      "hasRunningWorkflow": false,
-      "counts": {"openPRs": 1, "mergedPRs": 0, "failedRuns": 1},
-      "prs": [{"number": 62, "title": "Release 2.4 verification", "status": "open", "updatedAt": "2099-07-14T09:52:00Z", "summary": "Runs staging release checks.", "claimedOutcome": null, "url": "https://github.com/example/support/pull/62", "workItems": []}],
-      "localWork": [{"title": "Release verification", "type": "workflow", "status": "failed", "activityAt": "2099-07-14T09:52:00Z", "error": {"cause": "Staging check timed out", "impact": "No production release claim made.", "next": "Inspect check logs."}}]
+      "prs": [
+        {
+          "num": 12,
+          "number": 12,
+          "title": "Session ledger persistence (SQLite)",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jul 10",
+          "updated": null,
+          "progress": null,
+          "outcome": "Sessions survive restarts — ledger in SQLite with WAL; zero data loss across 50 kill tests.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Kill-test 50/50" }
+          ],
+          "tasks": {
+            "done": 4,
+            "total": 4
+          },
+          "runs": [
+            { "label": "vitest 38/38", "time": "Jul 10 09:12", "ok": true }
+          ]
+        },
+        {
+          "num": 11,
+          "number": 11,
+          "title": "Mascot state machine",
+          "status": "failed",
+          "statusLabel": "Failed — not built",
+          "date": "closed Jul 6",
+          "updated": null,
+          "progress": null,
+          "outcome": null,
+          "error": {
+            "cause": "Circular import mascot ↔ store breaks the Vite build",
+            "impact": "No artifact produced — feature was never built or shipped",
+            "next": "Extract shared types into mascot-types.ts, reopen as a new PR"
+          },
+          "verification": [
+            { "tone": "fail", "label": "Build failed — never shipped" }
+          ],
+          "tasks": {
+            "done": 2,
+            "total": 5
+          },
+          "runs": [
+            { "label": "vite build · exit 1", "time": "Jul 6 15:33", "ok": false }
+          ]
+        },
+        {
+          "num": 9,
+          "number": 9,
+          "title": "Project folder scanner + git status probe",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 30",
+          "updated": null,
+          "progress": null,
+          "outcome": "Tower auto-discovers every repo under ~/dev and reads branch, ahead/behind, dirty state.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Scanned 14 real repos · Jun 30" }
+          ],
+          "tasks": {
+            "done": 5,
+            "total": 5
+          },
+          "runs": [
+            { "label": "vitest 24/24", "time": "Jun 30 16:20", "ok": true }
+          ]
+        },
+        {
+          "num": 7,
+          "number": 7,
+          "title": "Zero-dependency index.html shell",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged Jun 22",
+          "updated": null,
+          "progress": null,
+          "outcome": "Single-file dashboard loads offline in <100ms; no build step, no npm.",
+          "verification": [
+            { "tone": "ok", "label": "Opened from file:// · pass" },
+            { "tone": "ok", "label": "Lighthouse 100 perf" }
+          ],
+          "tasks": {
+            "done": 3,
+            "total": 3
+          },
+          "runs": [
+            { "label": "manual smoke · pass", "time": "Jun 22 11:00", "ok": true }
+          ]
+        }
+      ],
+      "local": [
+        { "t": "Spike: watchman-based folder scanner", "date": "Jul 11", "note": "Prototype in scratch/watch.js — promising, needs a PR" }
+      ],
+      "statusMd": null,
+      "wrapup": null
     },
     {
-      "id": "developer-portal",
-      "name": "Developer Portal",
-      "path": "~/work/developer-portal",
+      "id": "inv",
+      "name": "Invoice Parser",
+      "path": "~/dev/invoice-parser",
+      "branch": "main",
+      "state": "dormant",
+      "prs": [
+        {
+          "num": 18,
+          "number": 18,
+          "title": "PDF table extraction v2",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged May 30",
+          "updated": null,
+          "progress": null,
+          "outcome": "Line-item accuracy 91% → 98% on the 40-doc eval set.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" },
+            { "tone": "ok", "label": "Eval 40/40 docs" }
+          ],
+          "tasks": {
+            "done": 4,
+            "total": 4
+          },
+          "runs": [
+            { "label": "eval 40/40", "time": "May 30 13:15", "ok": true }
+          ]
+        },
+        {
+          "num": 15,
+          "number": 15,
+          "title": "OCR fallback for scanned invoices",
+          "status": "merged",
+          "statusLabel": "Merged",
+          "date": "merged May 18",
+          "updated": null,
+          "progress": null,
+          "outcome": "Scanned invoices no longer rejected — OCR fallback covers the full test corpus.",
+          "verification": [
+            { "tone": "ok", "label": "CI green" }
+          ],
+          "tasks": {
+            "done": 3,
+            "total": 3
+          },
+          "runs": [
+            { "label": "pytest 33/33", "time": "May 18 10:22", "ok": true }
+          ]
+        }
+      ],
+      "local": [],
+      "statusMd": null,
+      "wrapup": null
+    },
+    {
+      "id": "legacy-scripts",
+      "name": "Legacy Scripts",
+      "path": "~/dev/legacy-scripts",
       "branch": "main",
       "state": "history",
-      "activityAt": "2099-07-12T15:20:00Z",
-      "hasActiveTask": false,
-      "hasRunningWorkflow": false,
-      "counts": {"openPRs": 0, "mergedPRs": 1, "failedRuns": 0},
-      "prs": [{"number": 41, "title": "Publish API quickstart", "status": "merged", "updatedAt": "2099-07-12T15:20:00Z", "summary": "Adds an end-to-end API quickstart.", "claimedOutcome": "New users can complete the first request from one page.", "url": "https://github.com/example/portal/pull/41", "workItems": []}],
-      "localWork": []
+      "prs": [],
+      "local": [],
+      "statusMd": null,
+      "wrapup": null
     }
   ]
 }

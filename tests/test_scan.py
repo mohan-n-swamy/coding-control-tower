@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -75,11 +76,11 @@ class ScanTests(unittest.TestCase):
     def test_build_state_uses_configured_owner_without_optional_adapters(self):
         config = Config(owner_name="Priya", project_roots=[], github_enabled=False)
         empty_usage = {"period": "today", "totalIn": 0, "totalOut": 0, "models": []}
-        with patch("coding_control_tower.scan.discover_repositories", return_value=[]), patch("coding_control_tower.scan.collect_claude", return_value=([], [])), patch("coding_control_tower.scan.collect_codex", return_value=[]), patch("coding_control_tower.scan.collect_github", return_value=([], {"enabled": False, "count": 0})), patch("coding_control_tower.scan.collect_usage", return_value=empty_usage):
+        with patch("coding_control_tower.scan.discover_repositories", return_value=[]), patch("coding_control_tower.scan.collect_claude", return_value=([], [])), patch("coding_control_tower.scan.collect_codex", return_value=[]), patch("coding_control_tower.scan.collect_github", return_value=([], {"enabled": False, "count": 0})), patch("coding_control_tower.scan.collect_usage", return_value=empty_usage), patch("coding_control_tower.scan.collect_live_sessions", return_value=[]), patch("coding_control_tower.scan.collect_decisions", return_value=[]):
             state = build_state(config)
         self.assertEqual(state["ownerName"], "Priya")
         self.assertEqual(state["projects"], [])
-        self.assertEqual(state["usage"], empty_usage)
+        self.assertEqual(state["usage"], {**empty_usage, "untracked": []})
         self.assertNotIn("needsMohan", state)
 
     def test_collect_usage_aggregates_todays_model_tokens(self):
@@ -115,6 +116,152 @@ class ScanTests(unittest.TestCase):
             metadata = read_jsonl_metadata(session)
         self.assertEqual(metadata["cwd"], "/work/new")
         self.assertEqual(metadata["branch"], "feature/new")
+
+    def test_collect_live_sessions_detects_fresh_transcripts_by_mtime(self):
+        from coding_control_tower.scan import collect_live_sessions
+        with tempfile.TemporaryDirectory() as tmp:
+            proj = Path(tmp) / "projects" / "-work-alpha"
+            proj.mkdir(parents=True)
+            fresh = proj / "abc.jsonl"
+            fresh.write_text(json.dumps({"timestamp": iso_now(), "cwd": "/work/alpha",
+                "message": {"model": "claude-opus-4-8"}}) + "\n")
+            stale = proj / "old.jsonl"
+            stale.write_text("{}\n")
+            os.utime(stale, (0, 0))
+            repos = [{"id": "alpha", "name": "Alpha", "path": "/work/alpha", "repoName": "alpha", "branch": "main"}]
+            live = collect_live_sessions(Config(claude_dir=tmp, codex_dir=tmp), repos)
+        self.assertEqual(len(live), 1)
+        self.assertEqual(live[0]["session"], "abc")
+        self.assertEqual(live[0]["projectId"], "alpha")
+        self.assertEqual(live[0]["model"], "claude-opus-4-8")
+
+    def _write_transcript(self, tmp, name, events):
+        proj = Path(tmp) / "projects" / "-work-alpha"
+        proj.mkdir(parents=True, exist_ok=True)
+        f = proj / (name + ".jsonl")
+        f.write_text("\n".join(json.dumps(e) for e in events) + "\n")
+        return f
+
+    def test_pending_askuserquestion_is_a_decision(self):
+        from coding_control_tower.scan import collect_decisions
+        ask = {"timestamp": iso_now(), "cwd": "/work/alpha", "message": {"content": [
+            {"type": "tool_use", "name": "AskUserQuestion", "id": "tu1",
+             "input": {"questions": [{"question": "Ship v1 now?"}]}}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_transcript(tmp, "pending", [ask])
+            repos = [{"id": "alpha", "name": "Alpha", "path": "/work/alpha", "repoName": "alpha", "branch": "main"}]
+            out = collect_decisions(Config(claude_dir=tmp), repos)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["kind"], "decision")
+        self.assertEqual(out[0]["ask"], "Ship v1 now?")
+        self.assertEqual(out[0]["projectId"], "alpha")
+        self.assertIn("claude --resume pending", out[0]["resumeCmd"])
+
+    def test_answered_question_and_foreign_tools_do_not_flag(self):
+        from coding_control_tower.scan import collect_decisions
+        ask = {"timestamp": iso_now(), "cwd": "/w", "message": {"content": [
+            {"type": "tool_use", "name": "AskUserQuestion", "id": "tu1",
+             "input": {"questions": [{"question": "Q?"}]}}]}}
+        answer = {"timestamp": iso_now(), "message": {"content": [
+            {"type": "tool_result", "tool_use_id": "tu1"}]}}
+        busy = {"timestamp": iso_now(), "message": {"content": [
+            {"type": "tool_use", "name": "Bash", "id": "tu2", "input": {}}]}}
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write_transcript(tmp, "answered", [ask, answer, busy])
+            out = collect_decisions(Config(claude_dir=tmp), [])
+        self.assertEqual(out, [])
+
+    def test_body_checklist_becomes_tasks_and_contract_names(self):
+        from coding_control_tower.scan import normalize_pr
+        raw = {"number": 81, "title": "Retry queue", "state": "open",
+               "url": "https://x", "repository": {"name": "alpha", "nameWithOwner": "o/alpha"},
+               "body": "## Where it stands\nDraining fine.\n- [x] migration\n- [ ] jitter test\n"}
+        pr = normalize_pr(raw)
+        self.assertEqual(pr["num"], 81)
+        self.assertEqual(pr["statusLabel"], "Active")
+        self.assertEqual(pr["progress"], "Draining fine.")
+        self.assertEqual(pr["tasks"], {"done": 1, "total": 2, "items": [
+            {"t": "migration", "done": True}, {"t": "jitter test", "done": False}]})
+        self.assertEqual(pr["verification"][-1]["tone"], "link")
+
+    def test_merged_without_outcome_gets_wait_badge_never_ok(self):
+        from coding_control_tower.scan import normalize_pr
+        pr = normalize_pr({"number": 9, "title": "x", "state": "merged", "repository": {}, "body": ""})
+        tones = [b["tone"] for b in pr["verification"]]
+        self.assertIn("wait", tones)
+        self.assertNotIn("ok", tones)
+
+    def test_dormant_split_and_bucket_pin_preserved(self):
+        old = {"id": "old", "name": "Old", "path": "/w/old", "repoName": "old", "branch": "main"}
+        fresh = {"id": "fresh", "name": "Fresh", "path": "/w/fresh", "repoName": "fresh", "branch": "main"}
+        work = [
+            {"type": "task", "source": "Claude", "session": "s1", "cwd": "/w/fresh/x", "title": "t",
+             "status": "completed", "activityAt": iso_now(), "prNumber": None},
+            {"type": "task", "source": "Claude", "session": "s2", "cwd": None, "title": "orphan",
+             "status": "in_progress", "activityAt": iso_now(), "prNumber": None},
+        ]
+        projects = assemble(Config(archive_days=30), [old, fresh], work, [], [])
+        states = {p["id"]: p["state"] for p in projects}
+        self.assertEqual(states["fresh"], "dormant")   # touched today, idle
+        self.assertEqual(states["old"], "history")     # never touched
+        self.assertEqual(states["unassigned"], "history")  # pin holds
+
+    def test_decisions_sort_before_failures_in_needs(self):
+        from coding_control_tower.scan import build_state
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch("coding_control_tower.scan.discover_repositories", return_value=[]), \
+             patch("coding_control_tower.scan.collect_claude", return_value=([], [])), \
+             patch("coding_control_tower.scan.collect_codex", return_value=[]), \
+             patch("coding_control_tower.scan.collect_github", return_value=([], {"enabled": False, "count": 0})), \
+             patch("coding_control_tower.scan.collect_usage", return_value={"period": "today", "totalIn": 0, "totalOut": 0, "models": []}), \
+             patch("coding_control_tower.scan.collect_live_sessions", return_value=[]), \
+             patch("coding_control_tower.scan.collect_decisions", return_value=[{"kind": "decision", "ask": "Q?", "askedAt": iso_now(), "activityAt": iso_now(), "project": "p", "projectId": "p", "session": "s", "source": "Claude", "resumeCmd": "claude --resume s", "blocks": "session s"}]):
+            state = build_state(Config(claude_dir=tmp))
+        self.assertEqual(state["schema_version"], 2)
+        self.assertEqual(state["needsOwner"][0]["kind"], "decision")
+        self.assertIn("liveSessions", state)
+
+    def test_usage_merge_recomputes_share_and_flags_untracked_codex(self):
+        from coding_control_tower.scan import _merge_usage
+        base = {"period": "today", "totalIn": 900, "totalOut": 100,
+                "models": [{"provider": "Anthropic", "model": "claude-opus-4-8", "tin": 900, "tout": 100, "share": 100}]}
+        ext = [{"provider": "Z.ai", "model": "glm-5.2", "tin": 800, "tout": 200, "approx": True}]
+        live = [{"source": "Codex"}, {"source": "Claude"}]
+        merged = _merge_usage(base, ext, live)
+        self.assertEqual(merged["totalIn"], 1700)
+        self.assertEqual(sum(r["share"] for r in merged["models"]), 100)
+        self.assertTrue(any(r["approx"] for r in merged["models"]))
+        self.assertFalse(merged["models"][0]["approx"])  # Claude row exact
+        self.assertEqual(merged["untracked"], ["Codex"])
+
+
+class AdapterLoaderTests(unittest.TestCase):
+    def test_valid_adapter_contributes_and_bad_keys_dropped(self):
+        from coding_control_tower.adapters import load_external, run_collectors
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "good.py").write_text(
+                "def collect(config):\n"
+                "    return {'usage_models': [{'provider':'Z.ai','model':'glm-5.2','tin':10,'tout':5,'approx':True}],\n"
+                "            'wrapups': {'proj': {'focus':'f','next':'n','evil':'x'}},\n"
+                "            'evil_channel': 1}\n")
+            collectors, errs = load_external(Config(adapter_dirs=[tmp]))
+            self.assertEqual(errs, [])
+            merged, run_errs = run_collectors(collectors, Config())
+            self.assertEqual(run_errs, [])
+            self.assertEqual(merged["usage_models"][0]["provider"], "Z.ai")
+            self.assertTrue(merged["usage_models"][0]["approx"])
+            self.assertEqual(merged["wrapups"]["proj"], {"focus": "f", "next": "n"})
+
+    def test_broken_adapter_isolated_as_error(self):
+        from coding_control_tower.adapters import load_external, run_collectors
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "boom.py").write_text("def collect(config):\n    raise RuntimeError('x')\n")
+            Path(tmp, "noattr.py").write_text("VALUE = 1\n")
+            collectors, errs = load_external(Config(adapter_dirs=[tmp]))
+            self.assertEqual(len(errs), 1)  # noattr rejected at load
+            merged, run_errs = run_collectors(collectors, Config())
+            self.assertEqual(len(run_errs), 1)  # boom rejected at run
+            self.assertEqual(merged["usage_models"], [])
 
 
 if __name__ == "__main__":

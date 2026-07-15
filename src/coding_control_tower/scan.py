@@ -15,7 +15,7 @@ from typing import Any, Iterable
 from .config import Config, state_dir
 from .paths import pr_cache_path, snapshot_path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ACTIVE_HOURS = 6
 HISTORY_DAYS = 30
 PR_CACHE_SECONDS = 900
@@ -241,6 +241,8 @@ def collect_codex(config: Config) -> list[dict[str, Any]]:
                 continue
             first = path.open("r", encoding="utf-8", errors="replace").readline()
             row = json.loads(first)
+            if not isinstance(row, dict):
+                continue
             payload = row.get("payload") or {}
             if row.get("type") != "session_meta" or payload.get("thread_source") == "subagent":
                 continue
@@ -254,6 +256,183 @@ def collect_codex(config: Config) -> list[dict[str, Any]]:
             "prNumber": None,
         })
     return work
+
+
+LIVE_WINDOW_MIN = 10  # a session whose transcript moved within this window is "live now"
+
+
+def _claude_session_probe(path: Path) -> dict[str, Any]:
+    """Cheap tail/head probe of one Claude transcript: model + startedAt + cwd.
+    Reads at most 64 lines from each end; malformed lines skipped per-line."""
+    model = None
+    started = None
+    cwd = None
+    try:
+        with path.open("r", encoding="utf-8", errors="replace") as handle:
+            head = [handle.readline() for _ in range(64)]
+        tail = path.read_text(encoding="utf-8", errors="replace").splitlines()[-64:]
+    except OSError:
+        return {"model": None, "startedAt": None, "cwd": None}
+    for line in head:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        started = started or row.get("timestamp")
+        cwd = cwd or row.get("cwd")
+        if started and cwd:
+            break
+    for line in reversed(tail):
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        cwd = row.get("cwd") or cwd
+        message = row.get("message") if isinstance(row.get("message"), dict) else {}
+        candidate = str(message.get("model") or "")
+        if candidate and not candidate.startswith("<"):
+            model = candidate
+            break
+    return {"model": model, "startedAt": started, "cwd": cwd}
+
+
+def collect_live_sessions(config: Config, repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Every session whose transcript was written within LIVE_WINDOW_MIN minutes."""
+    cutoff = time.time() - LIVE_WINDOW_MIN * 60
+    out: list[dict[str, Any]] = []
+    claude = config.resolved_claude_dir()
+    projects_dir = claude / "projects" if claude else None
+    if projects_dir and projects_dir.is_dir():
+        for path in projects_dir.glob("*/*.jsonl"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+            except OSError:
+                continue
+            probe = _claude_session_probe(path)
+            repo = project_for_cwd(probe["cwd"], repos)
+            out.append({
+                "source": "Claude", "session": path.stem,
+                "projectId": repo["id"] if repo else None,
+                "project": repo["name"] if repo else None,
+                "cwd": probe["cwd"], "model": probe["model"],
+                "activityAt": iso_mtime(path), "startedAt": probe["startedAt"],
+            })
+    codex = config.resolved_codex_dir()
+    sessions = codex / "sessions" if codex else None
+    if sessions and sessions.is_dir():
+        for path in sessions.rglob("*.jsonl"):
+            try:
+                if path.stat().st_mtime < cutoff:
+                    continue
+                first = path.open("r", encoding="utf-8", errors="replace").readline()
+                row = json.loads(first)
+                if not isinstance(row, dict):
+                    continue
+                payload = row.get("payload") or {}
+                if row.get("type") != "session_meta" or payload.get("thread_source") == "subagent":
+                    continue
+            except (OSError, ValueError):
+                continue
+            repo = project_for_cwd(payload.get("cwd"), repos)
+            out.append({
+                "source": "Codex", "session": str(payload.get("id") or path.stem),
+                "projectId": repo["id"] if repo else None,
+                "project": repo["name"] if repo else None,
+                "cwd": payload.get("cwd"), "model": None,
+                "activityAt": iso_mtime(path), "startedAt": row.get("timestamp"),
+            })
+    out.sort(key=lambda item: timestamp(item.get("activityAt")), reverse=True)
+    return out[:8]
+
+
+BLOCKING_TOOLS = frozenset({"AskUserQuestion", "ExitPlanMode"})
+DECISION_MAX_AGE_H = 24  # a pending question older than this is a dead session, not a decision
+
+
+def _pending_blockers(path: Path) -> list[dict[str, Any]]:
+    """Single forward pass over one Claude transcript: blocking tool_use entries
+    with no matching tool_result. Returns [{id, name, question, askedAt, cwd}]."""
+    pending: dict[str, dict[str, Any]] = {}
+    cwd = None
+    try:
+        handle = path.open("r", encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    with handle:
+        for line in handle:
+            if '"tool_use"' not in line and '"tool_result"' not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            cwd = row.get("cwd") or cwd
+            message = row.get("message") if isinstance(row.get("message"), dict) else {}
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") in BLOCKING_TOOLS:
+                    if not block.get("id"):
+                        continue  # id-less block would key as 'None' and collide
+                    question = ""
+                    if block.get("name") == "AskUserQuestion":
+                        questions = (block.get("input") or {}).get("questions") or []
+                        if questions and isinstance(questions[0], dict):
+                            question = str(questions[0].get("question") or "")
+                    else:
+                        question = "Approve the proposed plan?"
+                    pending[str(block.get("id"))] = {
+                        "id": str(block.get("id")), "name": str(block.get("name")),
+                        "question": question[:200], "askedAt": row.get("timestamp"), "cwd": cwd,
+                    }
+                elif block.get("type") == "tool_result" and block.get("tool_use_id"):
+                    pending.pop(str(block.get("tool_use_id")), None)
+    return list(pending.values())
+
+
+def collect_decisions(config: Config, repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """needsOwner kind:'decision' entries — sessions waiting on the user right now."""
+    claude = config.resolved_claude_dir()
+    projects_dir = claude / "projects" if claude else None
+    if not projects_dir or not projects_dir.is_dir():
+        return []
+    cutoff = time.time() - DECISION_MAX_AGE_H * 3600
+    out: list[dict[str, Any]] = []
+    for path in projects_dir.glob("*/*.jsonl"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                continue
+        except OSError:
+            continue
+        blockers = _pending_blockers(path)
+        if not blockers:
+            continue
+        newest = max(blockers, key=lambda item: timestamp(item.get("askedAt")))
+        repo = project_for_cwd(newest.get("cwd"), repos)
+        session = path.stem
+        out.append({
+            "kind": "decision",
+            "projectId": repo["id"] if repo else None,
+            "project": repo["name"] if repo else (newest.get("cwd") or "unknown"),
+            "ask": newest["question"] or f"{newest['name']} pending",
+            "blocks": f"session {session[:8]} — waiting since ask",
+            "askedAt": newest.get("askedAt"),
+            "activityAt": newest.get("askedAt"),
+            "session": session, "source": "Claude",
+            "resumeCmd": f"claude --resume {session}" + (f"  # cwd: {newest.get('cwd')}" if newest.get("cwd") else ""),
+        })
+    out.sort(key=lambda item: timestamp(item.get("askedAt")), reverse=True)
+    return out
 
 
 def _provider_for_model(model: str) -> str:
@@ -321,6 +500,30 @@ def collect_usage(config: Config) -> dict[str, Any]:
     }
 
 
+def _merge_usage(usage: dict[str, Any], external_rows: list[dict[str, Any]],
+                 live: list[dict[str, Any]]) -> dict[str, Any]:
+    """Fold external adapter usage rows into the Claude-scanned usage block."""
+    models = list(usage.get("models") or [])
+    for row in models:
+        row.setdefault("approx", False)
+    models.extend(external_rows)
+    grand = sum(row["tin"] + row["tout"] for row in models)
+    for row in models:
+        row["share"] = round(100 * (row["tin"] + row["tout"]) / grand) if grand else 0
+    models.sort(key=lambda row: row["tin"] + row["tout"], reverse=True)
+    tracked_providers = {row["provider"] for row in models}
+    live_sources = {item["source"] for item in live}
+    untracked = sorted(source for source in live_sources
+                       if source == "Codex" and "OpenAI" not in tracked_providers)
+    return {
+        "period": usage.get("period", "today"),
+        "totalIn": sum(row["tin"] for row in models),
+        "totalOut": sum(row["tout"] for row in models),
+        "models": models[:10],
+        "untracked": untracked,
+    }
+
+
 def parse_pr(value: Any) -> int | None:
     match = PR_RE.search(str(value or ""))
     return int(match.group(1)) if match else None
@@ -335,19 +538,53 @@ def body_section(body: str, labels: Iterable[str]) -> str | None:
     return clean[:500] or None
 
 
+CHECKBOX_RE = re.compile(r"(?im)^\s*[-*]\s*\[( |x|X)\]\s+(.+?)\s*$")
+
+
+def parse_body_tasks(body: str) -> dict[str, Any] | None:
+    """PR-body markdown checklist -> design tasks shape, or None if no checklist."""
+    items = [{"t": match.group(2)[:160], "done": match.group(1).lower() == "x"}
+             for match in CHECKBOX_RE.finditer(body or "")]
+    if not items:
+        return None
+    return {"done": sum(1 for item in items if item["done"]), "total": len(items), "items": items[:20]}
+
+
+def _pr_verification(pr: dict[str, Any]) -> list[dict[str, Any]]:
+    """Data-driven badges from scanned facts ONLY — never invented."""
+    badges: list[dict[str, Any]] = []
+    if pr.get("outcome"):
+        badges.append({"tone": "ok", "label": "Outcome claimed · PR body"})
+    elif pr.get("status") == "merged":
+        badges.append({"tone": "wait", "label": "Merged — no delivery proof in body"})
+    if pr.get("status") == "closed":
+        badges.append({"tone": "fail", "label": "Closed — not built"})
+    if pr.get("url"):
+        badges.append({"tone": "link", "label": "OPEN ON GITHUB", "href": pr["url"]})
+    return badges
+
+
 def normalize_pr(raw: dict[str, Any]) -> dict[str, Any]:
     repo = raw.get("repository") or {}
     status = "draft" if raw.get("isDraft") else str(raw.get("state") or "closed").lower()
     body = str(raw.get("body") or "")
     summary = body_section(body, ("Summary", "What", "Fix", "Problem")) or str(raw.get("title") or "")
     outcome = body_section(body, ("Outcome", "Delivered", "Deploy state", "Done proof"))
-    return {
-        "number": int(raw.get("number") or 0), "title": str(raw.get("title") or "Untitled PR")[:240],
-        "status": status, "createdAt": raw.get("createdAt"), "updatedAt": raw.get("updatedAt") or raw.get("closedAt"),
+    number = int(raw.get("number") or 0)
+    progress = body_section(CHECKBOX_RE.sub("", body), ("Where it stands", "Status", "Progress")) or summary
+    status_label = {"open": "Active", "draft": "Draft", "merged": "Merged", "closed": "Failed — not built"}.get(status, status.title())
+    pr = {
+        "number": number, "num": number, "title": str(raw.get("title") or "Untitled PR")[:240],
+        "status": status, "statusLabel": status_label,
+        "createdAt": raw.get("createdAt"), "updatedAt": raw.get("updatedAt") or raw.get("closedAt"),
         "url": raw.get("url"), "repoName": str(repo.get("name") or ""), "repoFullName": str(repo.get("nameWithOwner") or ""),
-        "summary": summary[:280], "claimedOutcome": outcome, "claimSource": "PR body" if outcome else None,
+        "summary": summary[:280], "progress": progress[:280],
+        "claimedOutcome": outcome, "outcome": outcome, "claimSource": "PR body" if outcome else None,
+        "tasks": parse_body_tasks(body), "runs": None, "error": None,
         "workItems": [],
     }
+    pr["verification"] = _pr_verification(pr)
+    return pr
 
 
 def collect_github(config: Config, refresh: bool = False) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -462,6 +699,14 @@ def assemble(config: Config, repos: list[dict[str, Any]], work: list[dict[str, A
                 by_number[number]["workItems"].append(item)
             else:
                 local.append(item)
+        for pr in project["prs"]:
+            if pr.get("workItems") and not pr.get("tasks"):
+                # session task files are the fresher truth when the body has no checklist
+                items = [{"t": str(w.get("title") or "Untitled")[:160],
+                          "done": str(w.get("status") or "") == "completed"}
+                         for w in pr["workItems"]]
+                pr["tasks"] = {"done": sum(1 for i in items if i["done"]),
+                               "total": len(items), "items": items[:20]}
         project["localWork"] = sorted(local, key=lambda item: timestamp(item.get("activityAt")), reverse=True)
         project["prs"].sort(key=lambda pr: timestamp(pr.get("updatedAt")), reverse=True)
         open_prs = sum(pr.get("status") in ("open", "draft") for pr in project["prs"])
@@ -471,6 +716,12 @@ def assemble(config: Config, repos: list[dict[str, Any]], work: list[dict[str, A
         if project["state"] == "history" and open_prs:
             project["state"] = "planning"
         project["provenance"] = list({(p["source"], p["session"], p["method"]): p for p in project["provenance"]}.values())
+    dormant_cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=max(1, config.archive_days))
+    for project in projects.values():
+        if project["state"] == "history" and project["id"] != "unassigned":
+            parsed = parse_time(project.get("activityAt"))
+            if parsed and parsed >= dormant_cutoff:
+                project["state"] = "dormant"
     return sorted(projects.values(), key=lambda project: (0 if project["hasActiveTask"] else 1, -timestamp(project.get("activityAt"))))
 
 
@@ -486,22 +737,69 @@ def derive_now(projects: list[dict[str, Any]]) -> dict[str, Any] | None:
     return None
 
 
+def _derive_now_v2(live: list[dict[str, Any]], legacy_now: dict[str, Any] | None,
+                   by_id: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """NowFacts contract: top live session, enriched with its project's wrapup.
+    Falls back to the legacy task-derived now when no session is live."""
+    if not live:
+        return legacy_now
+    top = live[0]
+    project = by_id.get(top.get("projectId") or "")
+    wrapup = (project or {}).get("wrapup") or {}
+    task = wrapup.get("focus") or f"{top['source']} session"
+    return {
+        "projectId": top.get("projectId"), "project": top.get("project") or "Unassigned",
+        "task": task, "pr": parse_pr(wrapup.get("next") or wrapup.get("focus")),
+        "startedAt": top.get("startedAt"), "activityAt": top.get("activityAt"),
+        "stop": wrapup.get("blockers") or "No source-backed stopping point recorded.",
+        "next": wrapup.get("next") or f"Continue: {task}",
+        "lastRun": None, "model": top.get("model"),
+        "session": top.get("session"), "source": top.get("source"),
+        "correlation": "observed" if top.get("projectId") else "unassigned",
+        "title": task,  # v1 alias (frontend legacy path reads now.title)
+    }
+
+
 def build_state(config: Config, refresh_github: bool = False) -> dict[str, Any]:
+    from .adapters import load_external, run_collectors
     repos = discover_repositories(config)
     claude_work, failures = collect_claude(config)
     codex_work = collect_codex(config)
     prs, github = collect_github(config, refresh_github)
     projects = assemble(config, repos, claude_work + codex_work, failures, prs)
+    live = collect_live_sessions(config, repos)
+    decisions = collect_decisions(config, repos)
+    collectors, load_errors = load_external(config)
+    external, run_errors = run_collectors(collectors, config)
+    adapter_errors = load_errors + run_errors
+    wrapups = external.get("wrapups") or {}
+    by_id = {project["id"]: project for project in projects}
+    for project_id, wrapup in wrapups.items():
+        if project_id in by_id:
+            by_id[project_id]["wrapup"] = wrapup
+    for project in projects:
+        project.setdefault("wrapup", None)
+        status_path = Path(project["path"]) / "STATUS.md" if project.get("path") else None
+        if status_path and status_path.is_file():
+            try:
+                project["statusMd"] = {"present": True, "updatedAt": iso_mtime(status_path),
+                                       "content": status_path.read_text(encoding="utf-8", errors="replace")[:8192]}
+            except OSError:
+                project["statusMd"] = None
+        else:
+            project["statusMd"] = None
     needs = [{"projectId": project["id"], "project": project["name"], **item} for project in projects for item in project["needsAction"]]
     needs.sort(key=lambda item: timestamp(item.get("activityAt")), reverse=True)
+    needs = decisions + needs  # decisions FIRST — the queue's whole point
     running = sum(project["hasActiveTask"] for project in projects)
     state = {
-        "schema_version": SCHEMA_VERSION, "scanner_version": "0.1.0", "generated_at": iso_now(),
-        "config": {"stale_threshold_ms": 900_000, "poll_interval_ms": 3_000, "timezone": config.timezone or ""},
+        "schema_version": SCHEMA_VERSION, "scanner_version": "0.2.0", "generated_at": iso_now(),
+        "config": {"stale_threshold_ms": 900_000, "poll_interval_ms": 3_000, "timezone": config.timezone or "", "archive_days": config.archive_days},
         "ownerName": config.owner_name or "You", "mood": "concerned" if needs else "watching" if running else "sleeping",
         "summary": {"running": running, "needs_review": 0, "failed": len(needs), "idle": running == 0},
-        "skipped_files": 0, "now": derive_now(projects), "needsOwner": needs,
-        "usage": collect_usage(config),
+        "skipped_files": 0, "now": _derive_now_v2(live, derive_now(projects), by_id), "needsOwner": needs,
+        "liveSessions": live, "adapterErrors": adapter_errors,
+        "usage": _merge_usage(collect_usage(config), external.get("usage_models") or [], live),
         "github": github, "projects": projects,
         "tasks": [item for item in claude_work if item["type"] == "task"],
         "workflows": [item for item in claude_work if item["type"] == "workflow"],

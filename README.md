@@ -46,6 +46,41 @@ display name later:
 coding-control-tower config set name "Alex"
 ```
 
+## Adapters
+
+The tower reads your agents' exhaust through adapters. Built-ins cover Claude Code,
+Codex, and GitHub. To add your own source, drop a Python file into any directory
+listed in `adapter_dirs` (config.json):
+
+```python
+# my_adapter.py — the entire interface
+def collect(config) -> dict:
+    return {
+        # today's token usage rows to merge into MODEL USAGE
+        "usage_models": [{"provider": "X", "model": "m", "tin": 0, "tout": 0, "approx": True}],
+        # per-project "where it stands" overlays (project id -> fields)
+        "wrapups": {"my-project": {"focus": "…", "next": "…", "blockers": "…"}},
+    }
+```
+
+Only those two channels exist. A failing adapter degrades to absence and appears in
+`adapterErrors` — it can never crash the scan. Approximate numbers must be flagged
+`approx`; the UI renders them with a `~`.
+
+## Works in different environments
+
+```bash
+coding-control-tower init
+coding-control-tower
+```
+
+The setup wizard asks for your name, project folders, and whether to use GitHub. Change the
+display name later:
+
+```bash
+coding-control-tower config set name "Alex"
+```
+
 ## Works in different environments
 
 - macOS, Linux, and Windows path conventions

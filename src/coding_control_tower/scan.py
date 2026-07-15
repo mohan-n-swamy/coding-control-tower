@@ -800,7 +800,7 @@ def build_state(config: Config, refresh_github: bool = False) -> dict[str, Any]:
     needs = decisions + needs  # decisions FIRST — the queue's whole point
     running = sum(project["hasActiveTask"] for project in projects)
     state = {
-        "schema_version": SCHEMA_VERSION, "scanner_version": "0.2.1", "generated_at": iso_now(),
+        "schema_version": SCHEMA_VERSION, "scanner_version": "0.3.0", "generated_at": iso_now(),
         "config": {"stale_threshold_ms": 900_000, "poll_interval_ms": 3_000, "timezone": config.timezone or "", "archive_days": config.archive_days},
         "ownerName": config.owner_name or "You", "mood": "concerned" if needs else "watching" if running else "sleeping",
         "summary": {"running": running, "needs_review": 0, "failed": len(needs), "idle": running == 0},
